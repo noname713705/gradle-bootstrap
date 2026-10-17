@@ -1,0 +1,8 @@
+.*.sw*
+# checkout of the gradle repo
+gradle/
+# the attempt to build gradle with maven
+maven/
+target/
+work/*
+sandbox/**/build/
