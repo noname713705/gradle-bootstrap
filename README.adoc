@@ -1,0 +1,98 @@
+= build gradle from scratch
+
+== TL;DR
+* this is a bunch of java classes that allows to build gradle versions purely from java
+* you won't need anything else than a JDK to build a "bootstraped" version of gradle
+* this "bootstraped" version of gradle will then allow you to build the "official" gradle
+* note that some patches are still required to build previous versions gradle today
+** some repositories have disapeared (bintray, ...)
+** some precise versions have disapeared from repos available today
+*** but they can be replaced by close enough versions of the same artifact
+* note that this project is mainly AI driven, don't expect the code to be easily readable
+* hopefully, it will just do what it is intended for
+** bootstrap gradle with only a JDK
+
+== How it works
+* There are a few AI generated .java files that will allow to build specific gradle "milestone" (either major version, or a version with technology change : jdk version, groovy version, kotlin version, ...)
+* the code of the .java is not easy to understand, but it's role is only to build a first bootstrap gradle that will do the real job, as intended
+* layout is as follows
+
+----
+./gradle			# a checkout of the official gradle repository
+./scripts			# the java classes that bootstraps a gradle version
+./sandbox			# minimalistic gradle projects to test the final gradle version is alive and building
+./target			# the places where built versions will live
+./target/gradle-x.x-minimal	# the bootstraped version
+./target/gradle-x.x		# the official gradle beeing built
+./work				# the work directory
+./work/minimal-tools		# the place where the bootstrap are compiled
+----
+
+== Some limitations
+* this does not make the whole process completely offline
+* dependencies are still fetched online
+* though I think it would be doable to split the build process in 4:
+** first download all required dependencies and then go "offline"
+** build the bootstrap with the dependencies we already fetched
+** apply the patches needed to the offcial gradle source
+** build the patched gradle source re-using the dependencies we already fetched
+
+== How to run it ?
+* the scripts are in `scripts/GradleMinimalBootstrap*.java`
+
+Each script compiles the sources of one Gradle version without Gradle, into a raw distribution that is only good
+enough to build the same version from its original build files.
+All scripts have the same command line, they differ by the version they know and the JDK they need.
+
+=== Running a script
+
+Run from the project directory (it holds `gradle/` and `target/`):
+
+[source,sh]
+----
+# compile once (Java 8 source, only the JDK)
+mkdir -p work/minimal-tools
+/data/devel/jdk8u482-b08/bin/javac -d work/minimal-tools scripts/GradleMinimalBootstrap90.java
+
+# run
+java -cp work/minimal-tools GradleMinimalBootstrap90 v9.0.0 --java /data/devel/jdk-17.0.20.1+1 > work/minimal-9.0.log
+----
+
+With a JDK 11 or newer, the compile step can be skipped: `java scripts/GradleMinimalBootstrap90.java v9.0.0 --java ...`
+
+=== Arguments and options
+
+|===
+| Argument		| Meaning							| Default
+| `<tag>`		| git tag in `./gradle` to build (`REL_4.0`, `v9.0.0`...)	| required
+| `--java JDK`		| JDK used to compile Gradle and run the tools			| `/data/devel/jdk8u482-b08`
+| `--work DIR`		| work directory						| `work/minimal` (-> `work/minimal/gradle-<v>`)
+| `--target DIR`	| where the distribution is written				| `target/gradle-<v>-minimal`
+| `--clean`		| delete the work directory and start over			| off
+| `--download-only`	| stop after the downloads, the next run needs no network	| off (GradleMinimalBootstrap80, 90 and 98)
+|===
+
+=== Per version
+
+|===
+| Script				| Tag		| `--java`
+| GradleMinimalBootstrap40		| REL_4.0	| JDK 8 (default)
+| GradleMinimalBootstrap50		| v5.0.0	| JDK 11 (`/data/devel/jdk-11.0.30+7`)
+| GradleMinimalBootstrap60		| v6.0.0	| JDK 11
+| GradleMinimalBootstrap70		| v7.0.0	| JDK 11
+| GradleMinimalBootstrap80		| v8.0.0	| JDK 11
+| GradleMinimalBootstrap810		| v8.10.0	| JDK 11
+| GradleMinimalBootstrap90		| v9.0.0	| JDK 17 (`/data/devel/jdk-17.0.20.1+1`)
+| GradleMinimalBootstrap98		| v9.8.1	| JDK 17 (the rebuild of 9.8.1 then runs on JDK 25 `/data/devel/jdk-25.0.2+10`)
+|===
+
+=== Behaviour
+
+* restartable: each step (source export, tools, dependencies, compilation, distribution) keeps its result in the work
+  directory, a rerun skips what is already done (`--clean` to start over)
+* one version per script: a script only knows the build layout of its own version; each new version starts from a
+  copy of the previous script, older copies are never changed; the header of each script lists what its version added
+* result: a raw distribution in `target/gradle-<v>-minimal`, only used to rebuild the same version from its original
+  build files; that rebuild is the one installed in `target/gradle-<v>`
+* `scripts/minimal-bootstrap.py` is the Python prototype, for 4.0 only
+
