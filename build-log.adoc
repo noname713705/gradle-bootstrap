@@ -1,0 +1,26 @@
+= build log
+
+* ant from branch gradle-0.0 allowed to build gradle-0.0
+* gradle-0.0 from branch gradle-0.0 allowed to build gradle-0.1
+* gradle-0.1 from branch gradle-0.1 allowed to build gradle-0.1.4
+* gradle-0.1.4 from branch gradle-0.1.4 allowed to build gradle-0.2
+* gradle-0.2 from branch gradle-0.2 allowed to build gradle-0.4
+* (experiment, not part of the chain) maven from maven/gradle-1.0 allowed to build gradle-1.0
+* gradle-0.4 from branch gradle-0.4 allowed to build gradle-0.5
+* gradle-0.5 from branch gradle-0.5 allowed to build gradle-0.6
+* gradle-0.6 from branch gradle-0.6 allowed to build gradle-0.8
+* gradle-0.8 from branch gradle-0.8 allowed to build gradle-0.9
+* gradle-0.9 from branch gradle-0.9 allowed to build gradle-1.0
+* gradle-1.0 from branch gradle-1.0 allowed to build gradle-2.0
+* gradle-2.0 from branch gradle-2.0 allowed to build gradle-3.0 without kotlin support
+* gradle-3.0 from branch gradle-4.0 allowed to build gradle-4.0 (bootstrap, from the alternate .3.0 build files)
+* gradle-4.0 from branch gradle-4.0 allowed to build gradle-4.0 (rebuild from the original build files, checks the bootstrapped version)
+* minimal bootstrap (scripts/GradleMinimalBootstrap50.java, no Gradle) allowed to build gradle-5.0 (from branch gradle-5.0, original build files)
+* minimal bootstrap (scripts/GradleMinimalBootstrap60.java, no Gradle) allowed to build gradle-6.0 (from branch gradle-6.0, original build files)
+* minimal bootstrap (scripts/GradleMinimalBootstrap70.java, no Gradle) allowed to build gradle-7.0 (from branch gradle-7.0, original build files)
+* minimal bootstrap (scripts/GradleMinimalBootstrap80.java, no Gradle) allowed to build gradle-8.0 (from branch gradle-8.0, original build files)
+* minimal bootstrap (scripts/GradleMinimalBootstrap810.java, no Gradle) allowed to build gradle-8.10 (from branch gradle-8.10, original build files)
+* minimal bootstrap (scripts/GradleMinimalBootstrap90.java, no Gradle) allowed to build gradle-9.0 (from branch gradle-9.0, original build files, no change)
+* gradle-9.0 from branch gradle-9.4 allowed to build gradle-9.4 (original build files, one build-logic fix: XMLConstants)
+* gradle-9.4 from branch gradle-9.5 allowed to build gradle-9.5 (original build files, no change)
+* minimal bootstrap (scripts/GradleMinimalBootstrap98.java, no Gradle) allowed to build gradle-9.8.1 (from branch gradle-9.8, original build files, no change)

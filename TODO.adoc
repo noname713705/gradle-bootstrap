@@ -1,0 +1,626 @@
+= TODO
+
+== branch gradle-0.0 (repo ./gradle)
+
+=== remove debug println in gradlefile
+* gradlefile lines 52-59 (inside configureByDag): println "XXX DEBUG", manifest, attr, version, deps
+* they print nothing useful now that the dependencies resolve
+* println "deps="+dependencies.resolveClasspath('runtime') runs an extra ivy resolve on every build
+* they are at column 0 inside an indented closure, easy to miss
+
+=== null skip in explodedDist hides missing dependencies
+* gradlefile lines 144-148: if(file!=null) ... else println "XXX skipping null file"
+* resolveClasspath returns null for a dependency that is not found
+* with the skip, the build is successful but lib/ misses jars, the distribution fails at startup
+** seen before: NoClassDefFoundError: org/apache/tools/ant/launch/Locator
+* option: fail the build instead (throw new GradleException(...))
+* until then: always check the result with bin/gradle -v and the sandbox project
+
+== branch gradle-0.1 (repo ./gradle)
+
+=== ClientModuleResolver.getResource is a stub (also in gradle-0.0)
+* src/main/groovy/org/gradle/api/internal/dependencies/ClientModuleResolver.groovy
+* added to compile against ivy 2.0.0, prints "XXXX NOT IMPLEMENTED" and returns new FileResource(null,null)
+* not called so far, check the log for XXXX when a later step fails on dependencies
+
+=== groovyc fork drops the javac options (builder change)
+* src/main/groovy/org/gradle/api/tasks/compile/AntGroovyc.groovy: fork: true, nested javac gets only source and target
+* compileOptions (debug, encoding, deprecation, ...) are ignored for groovy/java joint compilation
+* fine for bootstrapping, check it if a later build needs an option (for example encoding)
+
+== branch gradle-0.2 (repo ./gradle)
+
+=== built with gradle-0.1.4, run: gradle -b build.gradle clean explodedDist
+* commit fa9fc4f3165 (WIP message) is part of the working build, together with the next commit
+* gradlesettings and the build.gradle changes only exist for the old builders (0.1 / 0.1.4)
+* commit d7759214b30: Maven Central URL without trailing slash (the jar resolver adds one, Central answers // with 404)
+** target/gradle-0.2 was rebuilt with it (by gradle-0.1.4)
+
+== branch gradle-0.4 (repo ./gradle)
+
+=== built with gradle-0.2, run: gradle clean explodedDistBase
+* explodedDist only adds the userguide (docs, not needed)
+* tests disabled in build.gradle (exclude '**'), one test failed: ProjectTasksPrettyPrinterTest (NPE in a groovy map proxy)
+* launch4j (windows exe) skipped: the launch4j zips are not on Maven Central, no bin/gradle.exe in the distribution
+* buildSrc VersionTest removed: it needs classes of 0.4, buildSrc is compiled against the builder (0.2)
+* the sandbox: the jar task is archive_jar from 0.4 on, use the libs task (works with all versions)
+
+== all branches (repo ./gradle)
+
+=== dependencies are downloaded again since gradle-0.4
+* builds up to gradle-0.2 used the ivy cache (~/.ivy2) filled in March: the // URL was not noticed before
+* buildSrc/lib (svnkit 1.3.5) is untracked and needed by the buildSrc builds of gradle-0.0 to gradle-0.2, keep it
+** gradle-0.4 takes svnkit from Maven Central (commit bdbfe450430)
+** it is also in the ivy cache: ~/.ivy2/cache/org.tmatesoft.svnkit
+
+== branch gradle-0.5 (repo ./gradle)
+
+=== built with gradle-0.4, but not with its bin/gradle
+* bin/gradle puts the whole gradle jar on java.class.path; the groovyc Ant task (groovy 1.5.5) appends
+  java.class.path to the classpath, so the builder's classes shadow the sources being compiled
+  (0.4 class org.gradle.api.internal.dependencies.ModuleDescriptorConverter vs 0.5 interface)
+* launch used instead: scripts/gradle-isolated.sh target/gradle-0.4 clean explodedDistBase
+  (java.class.path = target/gradle-0.4-bootstrap.jar, only org/gradle/BootstrapMain and, from 0.5 on,
+  org/gradle/util/BootstrapUtil, created once from the distribution's gradle jar)
+* the leak is in the standard versions: bin/gradle from REL-0.4's own buildSrc + groovy 1.5.5 groovyc
+  (Path.concatSystemClasspath("last")); the original project never saw it (always built by a snapshot of
+  almost the same sources)
+* scripts/gradle-isolated.sh only works for distributions started by org.gradle.BootstrapMain (checked)
+
+=== build script changes (adaptations to the gradle-0.4 builder)
+* deps: groups, addMavenRepo, svnkit 1.3.5 from Maven Central, ivy 2.0.0-rc2 kept (on Maven Central)
+* BootstrapUtil (0.5) -> GradleUtil (0.4) in buildSrc, buildSrc VersionTest removed
+* addConfiguration('x') {closure} -> addConfiguration(new ivy Configuration(...))
+* runtime("dep") {closure} -> dependency(['runtime'], "dep") {closure}
+* build.taskGraph.whenReady {graph} -> init.doFirst {task, graph}
+* groovyOptions (fork memory) commented out, tests disabled
+* maven-ant-tasks 2.0.9: exclude module ant (pulls ant:ant:1.6.2, breaks Ant 1.7.0 at runtime:
+  NoSuchMethodError AntXMLContext.setCurrentTargets)
+* source: Maven URL https without trailing slash (DependencyManager.java)
+* docs (javadoc, groovydoc) build fine here, kept
+
+== scripts/try-build.py
+
+=== findings while testing it (0.4 -> 0.5 again, in a fresh worktree)
+* src/samples is an empty directory in the svn era, git does not keep it: the explodedDistBase builds
+  in ./gradle only worked because an old empty src/samples was lying there (try-build creates it)
+* gradle 0.x exits with 0 on BUILD FAILED: check the output (try-build does), not the exit code
+* attempts run in work/<branch> (git worktree, new branch), logs in work/logs/<branch>.log,
+  nothing is committed; remove a failed attempt with:
+  git -C gradle worktree remove --force work/<branch> && git -C gradle branch -D <branch>
+
+== branch gradle-0.6 (commit 72f836630ba, installed: target/gradle-0.6)
+
+=== built with gradle-0.5 from build files in the 0.5 DSL, the 0.6 build files are untouched
+* REL-0.6 changed the build DSL (repositories {}, configurations {}, files(), task x << {}): translating
+  the 0.6 build.gradle line by line was too big, the snapshot pins (6 steps) were the other option
+* instead, added files in the DSL of the builder (one per milestone, named after the builder version):
+** build.gradle.0.5: build.gradle of REL-0.5 + the dependencies of 0.6, explodedDistBase as in 0.6,
+   no IntegTestSuite (removed from buildSrc in 0.6)
+** buildSrc/build.gradle.0.5: buildSrc/build.gradle of REL-0.5 + the dependencies of 0.6;
+   org/gradle/build/docs/** not compiled (needs the 0.6 api); groovyc not forked for buildSrc
+   (a forked groovyc of groovy 1.5 ignores the excludes)
+** settings.gradle.0.5: buildSrc uses build.gradle.0.5 (-b does not apply to buildSrc)
+* docs and tests skipped from the command line, not in the build files: -Dskip.<task>=true
+* run: scripts/try-build.py target/gradle-0.5 REL-0.6 gradle-0.6 --keep --task "-c settings.gradle.0.5
+  -b build.gradle.0.5 -Dskip.test=true -Dskip.testCompile=true -Dskip.javadoc=true -Dskip.groovydoc=true
+  clean explodedDistBase"
+* jsch:jsch:0.1.31 (not on Maven Central) -> com.jcraft:jsch:0.1.31 (same version)
+* source: MAVEN_CENTRAL_URL (ResolverContainer.java) https, no trailing slash
+* fallback kept: work/gradle-0.6-20bce12 (first snapshot pin after 0.5), not needed now
+
+== branch gradle-0.8 (commit 4a16e1f1c1a, installed: target/gradle-0.8)
+
+=== built with gradle-0.6 (0.7 skipped) from build files in the 0.6 DSL, the 0.8 build files are untouched
+* run: scripts/try-build.py target/gradle-0.6 REL-0.8 gradle-0.8 --keep --task "-c settings.gradle.0.6
+  -Dskip.test=true -Dskip.testCompile=true -Dskip.javadoc=true -Dskip.groovydoc=true clean explodedDistBase"
+* 0.8 is the first multi-project build: settings.gradle.0.6 = settings.gradle of 0.8 with the build files
+  <name>.gradle.0.6 (root, core, open-api, ui, wrapper); gradle-0.5 could not do it (no projectDir/buildFileName)
+* buildSrc: buildSrc/settings.gradle.0.6 selects buildSrc/build.gradle.0.6 (a build file set on the buildSrc
+  start parameter is lost in gradle-0.6, the settings file is kept)
+* the .0.6 files are copies of the 0.8 ones, translated to 0.6: code-quality, ide, check/test aggregates,
+  testFixtures, integTest left out; root build.gradle.0.6 stops after explodedDistBase (docs, zips, release...
+  left out); source sets -> classesDir, compileGroovy -> compile; gradle.taskGraph -> build.taskGraph;
+  files() dependencies -> groovyClasspath/unmanagedClasspath; plugins.withType -> sourceCompatibility in subprojects
+* subprojects share the version of the root project (no property inheritance in gradle-0.6: versionModifier)
+* explodedDistBase: dependsOn configurations.distLib.buildDependencies; project jars copied from the jar tasks
+  (the internal repository of gradle-0.6 drops their version)
+* version properties written to org/gradle/version.properties (GradleVersion.FILE_NAME of the builder differs)
+* com.svnkit 1.1.6 -> org.tmatesoft.svnkit 1.3.5, jsch:jsch -> com.jcraft:jsch (same version)
+* source: MAVEN_CENTRAL_URL in subprojects/gradle-core (ResolverContainer.java) https, no trailing slash
+* sandbox: 0.8 has no libs task anymore, try-build uses jar from 0.8 on
+* scripts/gradle-isolated.sh: the bootstrap jar now holds BootstrapMain and the org.gradle classes it needs
+  (followed with javap; 0.8 also needs org.gradle.api.UncheckedIOException)
+
+== branch gradle-0.9 (commit b0d1e6a0e80, installed: target/gradle-0.9, worktree work/gradle-0.9)
+
+=== built with gradle-0.8 from build files in the 0.8 DSL, the 0.9 build files are untouched
+* run: scripts/try-build.py target/gradle-0.8 REL_0.9 gradle-0.9 --keep --dist build/distributions/exploded
+  --task "-c settings.gradle.0.8 -Dskip.test=true -Dskip.compileTestJava=true -Dskip.compileTestGroovy=true
+  -Dskip.processTestResources=true clean explodedDist"
+* buildSrc/settings.gradle (new, default name): gradle-0.8 builds buildSrc before any settings script, only from
+  the buildSrc directory; the file selects build.gradle.0.8 only when the running Gradle is 0.8 (checked: the
+  bootstrapped 0.9 evaluates buildSrc/build.gradle and build.gradle, the original files)
+* settings.gradle.0.8: projects of 0.9 without docs, build files <name>.gradle.0.8
+* root build.gradle.0.8: usePlugin, Maven Central + repo.gradle.org (pmaven) instead of gradle.artifactoryonline.com,
+  version computed inline (buildSrc Version needs FileVisitDetails.lastModified), core's external dependencies
+  added to the other projects (not passed on by project(':core') in 0.8), explodedDist with ant (no copySpec,
+  the 0.8 Copy task copied nothing): bin/, lib/, lib/plugins/ as binDistImage of 0.9, without docs
+* buildSrc/build.gradle.0.8: usePlugin, builder classpaths (no gradleApi()/localGroovy()), docs helpers and
+  Install (extends Sync) not compiled
+* subprojects: apply plugin groovy, integTest.gradle, test fixtures, integTest tasks, ide parts, test jvmArgs left
+  out; core: version properties written in compileGroovy.doLast (no @Input in 0.8); wrapper: gradle-wrapper.jar
+  built with ant (0.8 Jar tasks have no copy spec)
+* biz.aQute:bndlib:0.0.384 (on no repository anymore) -> 1.10.0 (next newer version on Maven Central)
+* 0.9 starts with GradleMain and only the launcher jar on the classpath: no classpath leak anymore,
+  gradle-isolated.sh is not needed (and refuses) from 0.9 on
+* rebuilding 0.9 with the original build files fails in :docs (docbook-xsl from the gone artifactory repository)
+
+== branch gradle-1.0 (commit 0296cb470b2, installed: target/gradle-1.0, worktree work/gradle-1.0)
+
+=== built with gradle-0.9 from build files in the 0.9 DSL, the 1.0 build files are untouched
+* run: scripts/try-build.py target/gradle-0.9 REL_1.0 gradle-1.0 --keep --dist build/distributions/exploded
+  --task "-c settings.gradle.0.9 clean explodedDist"
+* the jars of lib/ and lib/plugins/ are the same as in the Gradle 1.0 binary (/data/devel/gradle-1.0)
+* buildSrc/settings.gradle: as for 0.9 (gradle-0.9 builds buildSrc before any settings script), selects
+  buildSrc/build.gradle.0.9 only when the running Gradle is 0.9
+* settings.gradle.0.9: without docs, integTest, internalTesting, internalIntegTesting, performance, website
+* the script plugins applied (gradle/*.gradle) also have .0.9 copies: compile, conventions-dsl (useTestFixtures
+  does nothing), groovyProject, providedConfiguration; the others are not applied
+* translations: ext (1.0-milestone-9) -> plain project properties; maven { url } -> mavenRepo; no
+  resolutionStrategy; withType(type) {closure} -> each; sourceSets.main.output -> classesDir (classpath
+  manifests, releases.xml, gradle-plugins.properties, gradle-wrapper.jar written into the classes dirs);
+  launcher start scripts with a plain URLClassLoader (no ClassLoaderFactory service); test tasks disabled
+  (enabled = false); fileMode of the copy spec not applied by 0.9 (chmod after explodedDist)
+* left out: ide, code quality, classycle, publishing, docs, tests, zips, install, release, wrapper update
+  tasks (groovy.json, Groovy 1.8), TestReportAggregator (1.0 internals)
+* org.samba.jcifs:jcifs:1.3.17 -> jcifs:jcifs:1.3.17@jar (its pom pulls servlet-api 2.4, not in the 1.0 dist)
+
+=== also built with maven (maven/gradle-1.0): experiment only
+* kept, not used: the chain stays Gradle only (decided 2026-10-13, too much noise)
+* target/gradle-1.0-maven is not a builder of the chain
+
+==== how
+* sources: gradle-src/ = git archive of tag REL_1.0 (subprojects only), not a checkout of ./gradle
+* poms generated by gen-poms.py (module table from REL_1.0 build files), run: python3 gen-poms.py && mvn package
+* java 7 (zulu7) + maven 3.8.9, groovy 1.8.6 joint compilation with gmavenplus 1.6.3
+* result: dist/target/gradle-1.0, copied to target/gradle-1.0-maven
+* checked against the gradle-1.0 binary in /data/devel/gradle-1.0: same jars in lib/ and lib/plugins/,
+  same class count in every gradle-*.jar, same resources
+
+==== differences with the original
+* org.samba.jcifs:jcifs:1.3.17 (not on Maven Central) replaced by jcifs:jcifs:1.3.17 (same version)
+* css3-pie-1.0beta3.htc not in gradle-core (HTML test report styling for IE, skipped)
+* start script bin/gradle written by hand (same launch: launcher jar + org.gradle.launcher.GradleMain),
+  no gradle.bat, no docs, no samples, no src
+* releases.xml: build-time is the maven build time (UTC)
+
+==== next
+* stronger check: target/gradle-1.0-maven builds REL_1.0 itself (gradle -x test install)
+* sandbox/hello uses usePlugin (removed in 1.0): use sandbox/hello-1.0 from now on
+
+== branch gradle-2.0 (commit 7e464a80bbd, installed: target/gradle-2.0, worktree work/gradle-2.0)
+
+=== built with gradle-1.0 (Java 7) from build files in the 1.0 DSL, the 2.0 build files are untouched
+* run: scripts/try-build.py target/gradle-1.0 v2.0.0 gradle-2.0 --keep --maven-proxy --dist build/distributions/exploded
+  --task "-c settings.gradle.1.0 clean :distributions:explodedDist"
+* alternate files made with scripts/make-alternate.py (settings.gradle.1.0 without docs, integTest, internalTesting,
+  internalIntegTesting, performance), then translated by hand
+* checked against the official gradle-2.0-bin.zip: same 140 jars in lib/ and lib/plugins/, except gradle-docs-2.0.jar
+  (only holds default-imports.txt, see below); default-imports.txt and library-versions.properties identical
+* downloads through scripts/maven-proxy.py (gradle-1.0 on Java 7, no SNI)
+* buildSrc: no checkstyle/codenarc/idea/eclipse/codeQuality/classycle; docs classes (org/gradle/build/docs,
+  jsoup, pegdown) excluded from the compile; buildSrc tests disabled
+* translations: JavaCompile -> Compile; resolutionStrategy.eachDependency (1.4) -> force asm-all/groovy plus
+  exclude org.ow2.asm:asm (asm 4.0 from jarjar, the original replaces it with asm-all); FileCollectionDependency ->
+  SelfResolvingDependency; javaVersion checks dropped; buildReceipt: .git is a file in a worktree
+* org.samba.jcifs:jcifs:1.3.17 -> jcifs:jcifs:1.3.17@jar (as for 1.0)
+* default-imports.txt (needed at runtime, NPE in ImportsReader without it): generated by the docs project in the
+  original (gradle-docs jar); here a defaultImports task in core.gradle.1.0 lists the packages of the public API
+  sources with the same includes/excludes
+* build-init library-versions.properties: the original resolves latest.release at build time; the versions of the
+  official 2.0 binary are written (scala-library 2.11.1, scalatest 2.2.0, scala-xml 1.0.2, groovy 2.3.3, junit 4.11)
+* tooling-api: no jarjar/shaded jar (plain project jar), no sources jar
+* left out: script plugins analytics, classycle, codeQuality, eclipse, idea, integTest, intTestImage, publish,
+  testFixtures, testGroupings, testSetup, testWithUnknownOS, wrapper, noDependencyResolutionDuringConfiguration,
+  incomingDistributions, ideaTestSourcesWorkaround, resumeBuild; zips, install tasks, test reports
+* new task :distributions:explodedDist (Sync of binDistImage + chmod of bin/)
+
+== branch gradle-3.0 (commit b0313204b1b, installed: target/gradle-3.0, worktree work/gradle-3.0)
+
+=== built with gradle-2.0 (Java 8) from build files in the 2.0 DSL, the 3.0 build files are untouched
+* run: scripts/try-build.py target/gradle-2.0 v3.0.0 gradle-3.0 --keep --java /data/devel/jdk8u482-b08
+  --dist build/distributions/exploded --task "-c settings.gradle.2.0 clean install -Pgradle_installPath=build/distributions/exploded"
+* no maven proxy anymore: gradle-2.0 on Java 8 downloads over https itself
+* first try with gradle-1.0 (Java 7): WIP commit 9e9f017e7af (.1.0 files), stopped at the root script plugins,
+  the .1.0 files are removed from the branch
+* settings.gradle.2.0: all the projects of 3.0 (docs and test projects too: only configured, built when needed);
+  the docs project builds the gradle-docs jar (default-imports.txt, api-mapping.txt) the original way
+* the original install task builds the distribution (bin/, lib/, lib/plugins/)
+* checked against the official gradle-3.0-bin.zip: same jars in lib/ and lib/plugins/ except the Kotlin ones (below);
+  default-imports.txt identical; api-mapping.txt same entries, 2 ambiguous simple names map to the other class
+  (BuildResult, CreateStartScripts: hash order, Java 8 vs Java 7 probably)
+* buildSrc: Maven Central first, code quality left out, tests disabled; also compiles PackageListGenerator and Trie
+  from subprojects/dependency-management (a 3.0 task type used by dependency-management.gradle, the original
+  builder was a 3.0 snapshot); the build script takes the class from buildSrc's class loader (gradle-2.0 does
+  not resolve the fully qualified name at script compile time)
+* translations: plugin id 'build-types' -> 'org.gradle.build-types'; useClassycle does nothing
+* left out: idea.gradle, eclipse.gradle (3.0 ide DSL; the idea/eclipse plugins themselves are applied to all projects,
+  the build files configure them), codeQuality.gradle, classycle, taskProperties (validateTaskProperties),
+  docs:checkstyleApi, getting-started.html (distDocs) in the distribution
+* org.samba.jcifs:jcifs:1.3.17 -> jcifs:jcifs:1.3.17@jar (same version)
+* build-init library-versions.properties: the versions of the official 3.0 binary are written (no latest.release lookup)
+* docs fonts (base64 in the css of the html reports, e.g. build comparison): 7 of 8 are gone from the old Google Fonts
+  urls, resolved leniently, a missing font gets an empty token (the css falls back to local fonts)
+
+=== Kotlin left out (needed again for the final build)
+* gradle-script-kotlin 0.3.0 needs Kotlin 1.1-M01, an early access build on no repository anymore (Maven Central,
+  repo.gradle.org, JetBrains repositories, bintray checked): the externalModules dependency is commented out
+* this 3.0 runs Groovy build scripts only (.gradle.kts not supported); 5 jars less than the official distribution:
+  gradle-script-kotlin-0.3.0, kotlin-compiler-embeddable, kotlin-reflect, kotlin-runtime, kotlin-stdlib 1.1-M01
+* not needed for the bootstrap; the final build (latest Gradle) needs Kotlin: its build scripts are Kotlin
+
+== branch gradle-4.0 (commits a99d5cd2f4a step 1, 163efa0d00c step 2; installed: target/gradle-4.0-bootstrap (step 1), target/gradle-4.0 (step 2); worktree work/gradle-4.0)
+
+=== step 1: built with gradle-3.0 (Java 8) from build files in the 3.0 DSL, the 4.0 build files are untouched
+* run: scripts/try-build.py target/gradle-3.0 v4.0.0 gradle-4.0 --keep --no-script-fixes --java /data/devel/jdk8u482-b08
+  --dist build/distributions/exploded --task "-c settings.gradle.3.0 clean install -Pgradle_installPath=build/distributions/exploded"
+* 4.0 is built twice: step 1 bootstraps it from alternate files (gradle-3.0 has no Kotlin support), step 2 rebuilds
+  REL_4.0 from its original build files with the bootstrapped 4.0, to check it (Kotlin included)
+* 3.1 to 3.4 were not built: their Kotlin (1.1.0-dev-2053, 1.1-M02) is on no repository anymore, and the API gap
+  from 3.0 is the same for 3.5 and 4.0 (each version is built by a snapshot of itself)
+* checked against the official gradle-4.0-bin.zip: same 162 jars in lib/ and lib/plugins/, Kotlin included
+  (gradle-script-kotlin 0.9.0, Kotlin 1.1.0); default-imports.txt identical; api-mapping.txt differs (not checked yet)
+* settings.gradle.3.0: all the projects of 4.0; buildSrc/settings.gradle (exists in 4.0): build.gradle.3.0 and
+  gradle/remoteHttpCacheSettings.gradle.3.0 (no build cache, remoteBuildCacheEnabled = false) when the running
+  Gradle is 3.0, the original settings otherwise
+* buildSrc/src/bootstrap-3.0 (compiled only by buildSrc/build.gradle.3.0, the original buildSrc build ignores it):
+** stubs of @Classpath (3.2), @PathSensitive and PathSensitivity (3.1): buildSrc compiles, gradle-3.0 ignores them
+** plugin id java-library (3.4) and the 3.4 configurations for every java project: implementation, runtimeOnly,
+   runtimeClasspath per source set, api for main (mapped to compile / runtime, no api/implementation separation);
+   SourceSetOutput.classesDirs, Test.testClassesDirs (extra property only, tests are not run)
+* WriteProperties (3.3) and PropertiesUtils compiled into buildSrc from subprojects/core (+ commons-io 2.2)
+* buildSrc: http-builder 0.7.2 (on no repository anymore, no newer version) -> 0.7.1, only used by
+  DistributedPerformanceTest (performance tests); Maven Central first; code quality left out; tests disabled
+* translations: plugin id 'build-types' -> 'org.gradle.build-types'; useClassycle does nothing
+* left out (4.0 api or code quality / ide / CI): normalization {}, outputs.doNotCacheIf, withPathSensitivity,
+  reproducibleFileOrder / preserveFileTimestamps (wrapper jar), buildScanUserData, taskCacheBuildScanUserData,
+  idea.gradle, eclipse.gradle (the idea/eclipse plugins are applied), codeQuality, classycle, taskProperties,
+  docs:checkstyleApi
+* org.samba.jcifs:jcifs:1.3.17 -> jcifs:jcifs:1.3.17@jar; docs fonts resolved leniently (as for 3.0)
+
+=== step 2: rebuild REL_4.0 from its original build files with target/gradle-4.0-bootstrap
+* run: scripts/try-build.py target/gradle-4.0-bootstrap v4.0.0 gradle-4.0 --keep --no-script-fixes
+  --java /data/devel/jdk8u482-b08 --dist build/distributions/rebuilt
+  --task "clean install -Pgradle_installPath=build/distributions/rebuilt"
+* the original build files, only the download fixes (marked "bootstrap:"): Maven Central first (build.gradle,
+  buildSrc/build.gradle), http-builder 0.7.1, jcifs:jcifs, docs fonts resolved leniently
+* original install task: docs not built except getting-started.html (distDocs); tests not run
+* result: same 162 jars as the official gradle-4.0-bin.zip, default-imports.txt identical, api-mapping.txt same
+  entries (3 ambiguous simple names map to the other class: BuildResult, Classpath, CreateStartScripts);
+  a build.gradle.kts runs (Kotlin DSL works)
+* a first run hung: 4 artifact downloads from repo.gradle.org stuck in the TLS handshake, gradle 4.0 has no read
+  timeout; killed and run again (7 min, no hang)
+
+== scripts/minimal-bootstrap.py (bootstrap by a minimal build, no Gradle)
+
+=== prototype on 4.0 (works)
+* run: scripts/minimal-bootstrap.py v4.0.0 -> target/gradle-4.0-minimal (work in work/minimal/gradle-4.0)
+* steps: git archive of the tag; ivy 2.5.2 and the target's groovy-all from Maven Central;
+  gradle/dependencies.gradle evaluated with Groovy (stubbed Gradle API); main configurations of the module build
+  files scanned (compile, runtime, api, implementation...); one ivy configuration per module;
+  resolutionStrategy group substitutions (asm, groovy) applied after resolution; one joint Java/Groovy
+  compilation of all main sources (5596 files, Java 8); classes split back into module jars by source file;
+  generated resources: classpath manifests, build receipt, plugin lists, default-imports / api-mapping,
+  relocated package lists (Trie dump), gradle-wrapper.jar in the plugins jar; lib/ = closure of the root
+  coreRuntime/runtime projects, lib/plugins/ = the rest; a minimal bin/gradle
+* no Kotlin DSL in the bootstrap (external module, not needed to run the Groovy build of 4.0)
+* fixes found on the way: script name (dependencies.module), dependencies.create, list-valued libraries,
+  org.samba.jcifs -> jcifs (MOVED table), classpath order (sbt incremental-compiler bundles an old jansi: jars of
+  base modules first, newest version per artifact), classpathManifest additionalProjects (runtime-api-info)
+* check: target/gradle-4.0-minimal rebuilds REL_4.0 from the original build files (branch gradle-4.0, the same
+  download fixes as step 2) in 10m40s: same 162 jars as the official binary, default-imports.txt identical,
+  a build.gradle.kts runs (work/gradle-4.0/build/distributions/rebuilt-minimal)
+* Java version: scripts/GradleMinimalBootstrap.java (Java 8 source, only the JDK; groovy, ivy and the compiler run in
+  child JVMs as in the Python version), run from the project directory:
+  mkdir -p work/minimal-tools && javac -d work/minimal-tools scripts/GradleMinimalBootstrap.java &&
+  java -cp work/minimal-tools GradleMinimalBootstrap v4.0.0 (or with JDK 11+: java scripts/GradleMinimalBootstrap.java v4.0.0);
+  options --java, --work, --target, --clean
+* checked: from scratch (work/minimal-java) the Java version gives the same distribution as the Python one: same files,
+  identical classes and generated resources, same manifest content (Java wraps manifest lines at 72 bytes, as the
+  jar specification requires); -v and the sandbox work (target/gradle-4.0-minimal-java)
+* one frozen copy per version that needed changes (decided 2026-10-14, GradleMinimalBootstrap.java removed): scripts/GradleMinimalBootstrap40.java is the
+  verified 4.0 version (same code as GradleMinimalBootstrap.java, class renamed); the next version starts from a
+  copy of the last working one (GradleMinimalBootstrap50.java...), the older copies are not changed afterwards
+* 8.0 directly (looked at, not tried): Kotlin dependency model (ExternalModulesExtension.kt, platform versions,
+  component metadata rules), 377 in-tree Kotlin sources (Kotlin 1.8.10, compiler plugins), Groovy 3 without
+  groovy-all, JDK 11, generated Kotlin DSL extensions, and the bootstrap needs a working Kotlin DSL to run the
+  8.0 build (included build-logic, precompiled script plugins); steps in between: 5.0 (Kotlin DSL external),
+  5.6/6.0 (Kotlin in-tree), 6.8 (ExternalModulesExtension.kt), 7.0 (build-logic)
+* the bootstrap does not depend on the build logic of the target, only on: dependencies.gradle, the dependency
+  lines of the module build files, docs.gradle (javadoc includes, default imports), root build.gradle (plugin
+  lists, core runtime), the launcher Class-Path line
+
+=== 5.0 (scripts/GradleMinimalBootstrap50.java, copy of the 4.0 one; works)
+* run: mkdir -p work/minimal-tools && javac -d work/minimal-tools scripts/GradleMinimalBootstrap50.java &&
+  java -cp work/minimal-tools GradleMinimalBootstrap50 v5.0.0 --java /data/devel/jdk-11.0.30+7 -> target/gradle-5.0-minimal
+  (compiled with JDK 11: the sources use Java 9 APIs, MethodHandles.privateLookupIn; classes for Java 8, runs on Java 8)
+* changes for 5.0 (see the header of the script): map libraries, .gradle.kts build files, platform versions as Ivy
+  overrides, the target's own Groovy (org.gradle.groovy:groovy-all:1.0-2.5.4), plugin lists and public API from buildSrc,
+  Kotlin DSL 1.0.4 external modules with their own classpath manifests (all the external jars in one manifest made the
+  Kotlin DSL generate accessors for internal plugin ids, which do not compile), compileOnly dependencies only on the
+  compile classpath (findbugs brought asm 3.3 into the distribution), buildTimestampIso in the build receipt,
+  api-metadata (empty parameter names index), release-features.txt, buildSrc component metadata rules and
+  capabilities.json as Ivy excludes (sisu-guava and google-collections shadowed guava: MapMaker.makeComputingMap)
+* kotlinx-metadata-jvm 0.0.4 (Kotlin DSL 1.0.4, was on bintray only) -> 0.0.5 (Maven Central), in the script and
+  forced in the build
+* minimal 5.0 vs official: 204 / 201 jars (guava annotation jars, servlet-api 2.4, full fastutil, no maven-compat:
+  MavenDependencyCleaningRule not reproduced), enough to run the real build
+* new sandbox sandbox/hello-5.0 (task << {} is gone in 5.0), used by try-build.py from 5.0 on
+
+=== REL_5.0 rebuilt with target/gradle-5.0-minimal (branch gradle-5.0 commit f44b9502208, installed: target/gradle-5.0, worktree work/gradle-5.0)
+* run: scripts/try-build.py target/gradle-5.0-minimal v5.0.0 gradle-5.0 --keep --no-script-fixes --java /data/devel/jdk8u482-b08
+  --dist build/distributions/rebuilt-minimal --task "-Pjava9Home=/data/devel/jdk-11.0.30+7
+  -Pgradlebuild.skipBuildSrcChecks=true clean install -Pgradle_installPath=build/distributions/rebuilt-minimal"
+* original build files, download fixes only (marked "bootstrap:"): Maven Central first (root, buildSrc), bintray
+  repositories removed (requests hang until they time out: a first run took 7h16m), ktlint tasks skipped with the
+  buildSrc checks (kolor 0.0.2 on jcenter only), http-builder 0.7.1, jcifs:jcifs, kotlinx-metadata-jvm forced to 0.0.5
+* result (19m57s): 202 jars, official 201: kotlinx-metadata-jvm 0.0.5 instead of 0.0.4, one more servlet-api-2.4
+  (from the pom of jcifs:jcifs); default-imports.txt, api-mapping.txt, parameter names identical; a build.gradle.kts runs
+
+=== 6.0 (scripts/GradleMinimalBootstrap60.java, copy of the 5.0 one; works)
+* gradle-5.0 cannot build 6.0 from its build files (stopped and asked): buildSrc uses 6.0 api
+  (enableFeaturePreview("GROOVY_COMPILATION_AVOIDANCE"), ValidatePlugins): 6.0 bootstrapped with the minimal build instead
+* run: java -cp work/minimal-tools GradleMinimalBootstrap60 v6.0.0 --java /data/devel/jdk-11.0.30+7 -> target/gradle-6.0-minimal
+* Kotlin compiled by the script: kotlin-compiler-embeddable 1.3.50 (kotlinVersion of dependencies.gradle) in a child
+  JVM, the 4 Kotlin modules (instant-execution, kotlin-dsl, kotlin-dsl-provider-plugins, kotlin-dsl-tooling-builders)
+  one at a time after the Java/Groovy compilation (no main Java/Groovy code uses them, they use no Groovy class);
+  options of buildSrc configureKotlinCompilerForGradleBuild; kotlin-dsl generated sources from the templates of
+  buildSrc GenerateKotlinDependencyExtensions (kotlin-dsl plugins version 1.3.1)
+* other changes: futureKotlin(), isTransitive = false blocks, base.archivesBaseName (kotlin-compiler-embeddable: the
+  compiler jar without the excluded entries), kotlin-dsl versions / embedded-kotlin properties, empty
+  <module>-parameter-names.properties, docs sources not compiled, GradleException in dependencies.gradle (license
+  check), setOf(rootProject.project(...)) and additionalProjects.add(...) forms
+* left out: instant-execution-report (Kotlin/JS), kotlin-dsl-plugins (published to the plugin portal),
+  kotlin-dsl-test-fixtures, kotlin-dsl-integ-tests, samples
+
+=== REL_6.0 rebuilt with target/gradle-6.0-minimal (branch gradle-6.0 commit 04b67fc2b79, installed: target/gradle-6.0, worktree work/gradle-6.0)
+* run: scripts/try-build.py target/gradle-6.0-minimal v6.0.0 gradle-6.0 --keep --no-script-fixes --java /data/devel/jdk-11.0.30+7
+  --dist build/distributions/rebuilt-minimal --task "clean install -Pgradle_installPath=build/distributions/rebuilt-minimal"
+  (JDK 11 runs the build)
+* download fixes only (marked "bootstrap:"): Maven Central first, bintray repositories removed, http-builder 0.7.1,
+  jcifs:jcifs, ktlint tasks disabled in buildSrc (kolor 0.0.2), repo.gradle.org libs-releases with
+  metadataSources { mavenPom(); artifact() }: pmaven-common and pmaven-groovy 0.8-20100325 are there without their pom
+  (404, the jars answer 200); Gradle 5 fell back to the jar, Gradle 6 needs metadata by default
+* incidents: /data full during one run (space freed by the user), a stale daemon kept the file hash lock (daemons stopped)
+* result (9m44s): 216 jars, official 215: one more servlet-api-2.4 (pom of jcifs:jcifs); default-imports.txt and
+  api-mapping.txt identical; a build.gradle.kts runs
+
+=== 7.0 (scripts/GradleMinimalBootstrap70.java, copy of the 6.0 one; works)
+* gradle-6.0 cannot read the 7.0 build (settings: pluginManagement { includeBuild }, not even in 6.8): bootstrapped
+  with the minimal build directly
+* run: java -cp work/minimal-tools GradleMinimalBootstrap70 v7.0.0 --java /data/devel/jdk-11.0.30+7 -> target/gradle-7.0-minimal
+* changes: build-logic* instead of buildSrc; libraries from build-logic ExternalModulesExtension.kt with the versions
+  of the distributions-dependencies platform (no Groovy evaluation); build.gradle.kts per module, kebab project paths,
+  libs.x, moduleIdentity.baseName; Groovy 3.0.7 compiles (org.codehaus.groovy:groovy); Kotlin 1.4.31 options;
+  sam-with-receiver compiler plugin for configuration-cache (kotlin-sam-with-receiver, the embeddable variant);
+  lib/ from core-platform, plugin lists from the gradlebuild.distribution.api-* / implementation-* plugin ids, a
+  generated gradle-runtime-api-info jar (lists, default imports, api mapping, relocated packages); default import
+  exclusions from build-logic GradleUserManualPlugin.java
+* fixes on the way: capabilities.json keeps the selected module (groovy is its own provider in 7.0); Ivy also
+  retrieves eclipse-plugin jars (org.eclipse.sisu.plexus); generator template regex; package-info.java now compiled
+  (package @NonNullApi: without it Kotlin saw the Gradle api without nullability, Property.set(null) was ambiguous
+  when 7.0's build-logic compiled); the frozen 4.0-6.0 copies do not compile package-info (their builds did not need it)
+* checked against the official 7.0: same plugin lists, all 87 modules; classpath manifests list the direct projects
+  (official: transitive), enough at runtime
+
+=== REL_7.0 rebuilt with target/gradle-7.0-minimal (branch gradle-7.0 commit b9ec9df33a5, installed: target/gradle-7.0, worktree work/gradle-7.0)
+* run: IGNORE_MIRROR=true scripts/try-build.py target/gradle-7.0-minimal v7.0.0 gradle-7.0 --keep --no-script-fixes
+  --java /data/devel/jdk-11.0.30+7 --dist build/distributions/rebuilt-minimal --task "--dependency-verification lenient
+  -Porg.gradle.java.installations.auto-download=false install -Pgradle_installPath=build/distributions/rebuilt-minimal"
+* IGNORE_MIRROR=true: gradle/shared-with-buildSrc/mirrors.settings.gradle.kts otherwise sends the plugin portal to
+  Gradle's internal mirror dev12.gradle.org (official switch, no file change)
+* --dependency-verification lenient (decided by the user): gradle/verification-metadata.xml rejects 2 artifacts:
+  grolifant-0.16.1.jar (the bytes changed since 2021: recorded sha256 362c45..., served today a867e9..., same on Maven
+  Central) and jcommander-1.78.jar (checksum ok, signature check fails); verification only warns
+* download fixes (marked "bootstrap:"): bintray repositories removed (7), Maven Central first (build-logic settings,
+  repositories plugin), libs-releases with metadataSources { mavenPom(); artifact() } (pmaven), http-builder 0.7.1,
+  jcifs:jcifs
+* source change (decided by the user): the JDK 11 toolchain vendor ADOPTOPENJDK removed (build-logic/jvm
+  gradlebuild.unittest-and-compile.gradle.kts): AdoptOpenJDK builds are gone, Temurin reports "Eclipse Adoptium"
+  (no match in Gradle 7.0, -Djava.vendor cannot override it); auto provisioning downloaded a Temurin 11 and hung
+  for 25 min in Gradle 7.0's tar extraction (the download and its partial unpack were deleted afterwards)
+* result (20m20s): 227 jars, official 226: one more servlet-api-2.4 (pom of jcifs:jcifs); default-imports.txt,
+  api-mapping.txt and both plugin lists identical; a build.gradle.kts runs
+
+=== 8.0 (scripts/GradleMinimalBootstrap80.java, copy of the 7.0 one; works)
+* run: java -cp work/minimal-tools GradleMinimalBootstrap80 v8.0.0 --java /data/devel/jdk-11.0.30+7 -> target/gradle-8.0-minimal
+* Kotlin options read from build-logic configureKotlinCompilerForGradleBuild, module options from the build files
+  (configuration-cache: -opt-in=kotlin.contracts.ExperimentalContracts, progressive mode)
+* Kotlin in three phases (Java code now uses Kotlin code: enterprise uses configuration-cache's InputTrackingState):
+  1. the Kotlin-only modules Java/Groovy modules depend on (configuration-cache, kotlin-dsl), kotlinc reading the Java
+  sources of their dependencies; 2. Java/Groovy; 3. the other Kotlin sources (kotlin-dsl-provider-plugins,
+  kotlin-dsl-tooling-builders, the Kotlin file of the mixed platform-jvm) against the compiled classes (kotlinc cannot
+  use compiled Kotlin whose signatures refer to types only present as Java sources)
+* Java compiled -source 8 -target 8 against JDK 11 (the original build: --release 8 for most modules, 25 modules
+  without it for Java 9+ / JDK internal APIs; one compilation cannot do both)
+* first source patch (decided by the user), in the source export only, bootstrap compile only (PATCHES table, logged):
+  subprojects/core/.../DescribingAndSpec.java toArray(Cast.uncheckedCast(...)) -> toArray(Cast.<Spec<? super T>[]>
+  uncheckedCast(...)), ambiguous against JDK 11 (Collection.toArray(IntFunction)); the real rebuild uses the original
+* repositories of build-logic added to the Ivy chain (capsule 0.6.3 on releases.usethesource.io only);
+  library constants with an interpolated version; the configuration-cache-report 1.2 jar unpacked into
+  org/gradle/configurationcache/problems (processResources from(zipTree(...)), needed by the Kotlin plugin at startup)
+
+=== REL_8.0 rebuilt with target/gradle-8.0-minimal (branch gradle-8.0 commit 9721133fc53, installed: target/gradle-8.0, worktree work/gradle-8.0)
+* run: IGNORE_MIRROR=true scripts/try-build.py target/gradle-8.0-minimal v8.0.0 gradle-8.0 --keep --no-script-fixes
+  --java /data/devel/jdk-11.0.30+7 --dist build/distributions/rebuilt-minimal
+  --task "-Porg.gradle.java.installations.auto-download=false install -Pgradle_installPath=build/distributions/rebuilt-minimal"
+* strict dependency verification passes (no lenient mode needed); toolchain vendor ADOPTIUM matches Temurin 11
+* download fixes (marked "bootstrap:"): http-builder 0.7.1; jcenter (settings.gradle.kts, build-logic/settings.gradle.kts)
+  -> repo.gradle.org/gradle/public (junit-xml-parser 1.0.0); a first run spent 11h on jcenter requests before failing
+* result (32m34s): the same 238 jars as the official gradle-8.0-bin.zip, default-imports.txt, api-mapping.txt and both
+  plugin lists identical; a build.gradle.kts runs
+
+=== 8.10 (scripts/GradleMinimalBootstrap810.java, copy of the 8.0 one; works)
+* why 8.10: gradle-8.0 cannot build REL_9.4.0 (Kotlin 2.3 build scripts, Gradle 9 APIs); plan agreed with the user:
+  8.10 (structural changes, still JDK 11 / Kotlin 1.9.24 / Groovy 3.0.22), then 9.0 (JDK 17 at
+  /data/devel/jdk-17.0.20.1+1, Kotlin 2, Groovy 4), then try 9.4.0 / 9.8.1
+* run: javac -d work/minimal-tools scripts/GradleMinimalBootstrap810.java (JDK 8), then
+  java -cp work/minimal-tools GradleMinimalBootstrap810 v8.10.0 --java /data/devel/jdk-11.0.30+7 > work/minimal-8.10.log
+  -> target/gradle-8.10-minimal (work dir work/minimal/gradle-8.10, finished steps are kept and skipped on a rerun)
+* 8.10 changes handled by the script (see its header): projects under platforms/<p>/x, subprojects/x, testing/x;
+  module set = distributions-full + its platforms (distributions-*, core-platform) + project closure (159 modules);
+  projects.camelCase accessors; "org.gradle:x" = build-logic project x (java-api-extractor,
+  kotlin-dsl-shared-runtime); instrumentation annotation processor (internal-instrumentation-processor, a tool
+  module) run per module with javac -proc:only + compile of the generated sources (core, core-api, language-jvm,
+  testing-jvm with -A...project=<name>, instrumentation-declarations); runtime-api-info gets
+  instrumented-super-types.properties and upgraded-properties.json; gradle-kotlin-dsl-extensions jar generated with
+  the kotlin-dsl-shared-runtime facades (Java driver) and kotlinc; lib/agents/gradle-instrumentation-agent
+  (-javaagent in bin/gradle); launchable jars (manifestClasspath, mainClassName): gradle-cli-main is the entry point;
+  Kotlin compilerOptions form; if (isBundleGroovy4) .. else .. constants (Groovy 3); futureKotlin("x") constants
+* fixed so far: project scan skipped every build file (export path contains /src/); kotlinStdlib = futureKotlin(...);
+  phase 1 Kotlin modules compiled with the Kotlin sources of the early Kotlin modules they depend on (compiled Kotlin
+  referring to Java-source types: "cannot access class"), their options merged, their classes removed afterwards;
+  sam-with-receiver: kotlin-sam-with-receiver-compiler-plugin-embeddable (Kotlin 1.9: kotlin-sam-with-receiver is only
+  the Gradle subplugin); mixed Kotlin/Java modules in phase 1 when needed (declarative-dsl-tooling-models);
+  apiVersion/languageVersion.set(KOTLIN_1_9) of a module; kotlin-serialization-compiler-plugin-embeddable;
+  relocation excludes read from build-logic PackageListGenerator.DEFAULT_EXCLUDES, matched on whole path segments
+  (8.10 no longer relocates kotlin, org/jetbrains/annotations...: with the 8.0 list the rebuild failed in
+  build-logic build-update-utils, unresolved org.jetbrains.annotations.VisibleForTesting)
+* known differences: KeepDependenciesByNameRule (guava keeps only failureaccess) not reproduced (a few extra jars);
+  jquery resource of reporting skipped; wrapper jar embedded without gr8 shrinking
+* target/gradle-8.10-minimal WORKS: -v (Kotlin 1.9.24, Groovy 3.0.22), sandbox hello-5.0 and a build.gradle.kts with
+  `java-library`; jar lists = official except: fastutil instead of fastutil-min, extra checker-qual, listenablefuture
+  (guava rule), kotlinx-serialization-core/json, kotlin-stdlib-common, apiguardian, sshd-osgi; 63 extension sources
+  and 15 instrumented-super-types lines as the official
+
+=== REL_8.10 rebuilt with target/gradle-8.10-minimal (branch gradle-8.10 commit e503af8a914, installed: target/gradle-8.10, worktree work/gradle-8.10)
+* run: IGNORE_MIRROR=true scripts/try-build.py target/gradle-8.10-minimal v8.10.0 gradle-8.10 --keep --no-script-fixes
+  --java /data/devel/jdk-11.0.30+7 --dist build/distributions/rebuilt-minimal
+  --task "-Porg.gradle.java.installations.auto-download=false install -Pgradle_installPath=build/distributions/rebuilt-minimal"
+* download fix (marked "bootstrap:"): http-builder 0.7.2 -> 0.7.1 (as 8.0); no jcenter anymore in 8.10
+* result (52m50s): the same jars as the official gradle-8.10-bin.zip (lib 170, lib/plugins 131, lib/agents 1);
+  default-imports, api-mapping, both plugin lists, instrumented-super-types, upgraded-properties and api-relocated
+  identical; -v and the sandbox hello-5.0 run
+* next: 9.0 (JDK 17 /data/devel/jdk-17.0.20.1+1, Kotlin 2, Groovy 4), then try 9.4.0 / 9.8.1
+
+=== 9.0 (scripts/GradleMinimalBootstrap90.java, copy of the 8.10 one; works)
+* direct attempt failed: target/gradle-8.10 (JDK 17, -PbuildKotlinVersion=2.2.0) cannot compile the 9.0
+  settings.gradle.kts (enum entries need Kotlin language 1.9, the scripts are compiled by the embedded Kotlin 1.9.24
+  at 1.8; settingsDirectory is a newer Settings API): option 1 (minimal bootstrap) chosen by the user
+* run: javac -d work/minimal-tools scripts/GradleMinimalBootstrap90.java (JDK 8), then
+  java -cp work/minimal-tools GradleMinimalBootstrap90 v9.0.0 --java /data/devel/jdk-17.0.20.1+1 > work/minimal-9.0.log
+  -> target/gradle-9.0-minimal (work dir work/minimal/gradle-9.0)
+* 9.0: JDK 17 required, Kotlin 2.2.0 (api/language 2.2), Groovy 4.0.27 only (org.apache.groovy); production code still
+  targets Java 8 (-source 8 -target 8 kept, the DescribingAndSpec patch still needed); the Groovy 4 joint compile and
+  the Kotlin 2.2 phases work unchanged
+* changes (script header): packaging/ projects (core-platform, distributions-*); val x = when (...) { 4 -> "v" };
+  relocation DEFAULT_INCLUDES (org/gradle/fileevents); kotlin-dsl shadow(kotlin-metadata-jvm) as a plain dependency
+  (not relocated); $LICENSE_HEADER in the kotlin-dsl templates; gradlebuild.* plugins applied transitively
+  (api-java -> instrumented-java-project: the instrumentation processor runs for every api-java module); driver:
+  AsmConstants in org.gradle.model.internal.asm, jspecify
+* result: -v (Kotlin 2.2.0, Groovy 4.0.27, JVM 17), sandbox hello-5.0 and a build.gradle.kts work; same Gradle module
+  jars as the official gradle-9.0.0-bin.zip, extra/other external jars (kotlin-metadata-jvm unrelocated, jspecify
+  instead of jspecify-no-module-annotation, fastutil instead of -min, rules not reproduced); 235 instrumented super
+  types as the official
+
+=== REL_9.0 rebuilt with target/gradle-9.0-minimal (branch gradle-9.0 = tag v9.0.0, no commit; installed: target/gradle-9.0, worktree work/gradle-9.0)
+* run: IGNORE_MIRROR=true scripts/try-build.py target/gradle-9.0-minimal v9.0.0 gradle-9.0 --keep --no-script-fixes
+  --java /data/devel/jdk-17.0.20.1+1 --dist build/distributions/rebuilt-minimal
+  --task "-Porg.gradle.java.installations.auto-download=false install -Pgradle_installPath=build/distributions/rebuilt-minimal"
+* no source change needed (no jcenter, no http-builder anymore): the branch stays at the tag
+* result (48m02s): the same jars as the official gradle-9.0.0-bin.zip (lib 183, lib/plugins 118, lib/agents 1);
+  default-imports, api-mapping, both plugin lists, instrumented-super-types, upgraded-properties and api-relocated
+  identical; -v (Kotlin 2.2.0, Groovy 4.0.27) and the sandbox hello-5.0 run
+* next: 9.4.0 (done, below), then 9.8.1
+
+=== REL_9.4.0 built with target/gradle-9.0 (branch gradle-9.4 commit 733559c51bb, installed: target/gradle-9.4, worktree work/gradle-9.4)
+* no minimal bootstrap needed: target/gradle-9.0 compiles the 9.4.0 settings and build-logic (Kotlin 2.2 embedded,
+  9.4 uses Kotlin 2.3.0 / Groovy 4.0.29 / JDK 17)
+* run: IGNORE_MIRROR=true scripts/try-build.py target/gradle-9.0 v9.4.0 gradle-9.4 --keep --no-script-fixes
+  --java /data/devel/jdk-17.0.20.1+1 --dist build/distributions/rebuilt-9.0
+  --task "-Porg.gradle.java.installations.auto-download=false install -Pgradle_installPath=build/distributions/rebuilt-9.0"
+* one fix (marked "bootstrap:", in build-logic only, decided with the user: on our branch, the tag untouched):
+  build-update-utils AbstractVersionsUpdateTask XMLConstants.ACCESS_EXTERNAL_DTD / ACCESS_EXTERNAL_SCHEMA -> their
+  string values (the Gradle 9.0 API classpath has the old javax.xml.XMLConstants of xml-apis 1.4.01)
+* result (43m21s): the same jars as the official gradle-9.4.0-bin.zip (lib 392, lib/plugins 241, lib/agents 2);
+  default-imports, api-mapping, both plugin lists, instrumented-super-types, upgraded-properties and api-relocated
+  identical; -v (Kotlin 2.3.0, Groovy 4.0.29) and the sandbox hello-5.0 run
+* next: 9.8.1 from target/gradle-9.4: needs a JDK 25 (gradle/gradle-daemon-jvm.properties toolchainVersion=25, the
+  user can provide one), Kotlin 2.4.10, Groovy 4.0.33, versions in TOML catalogs
+  (gradle/dependency-management/*.versions.toml); try the direct build first
+
+=== REL_9.5.0 built with target/gradle-9.4 (branch gradle-9.5 = tag v9.5.0, no commit; installed: target/gradle-9.5, worktree work/gradle-9.5)
+* why 9.5: 9.8.1 directly with target/gradle-9.4 (JDK 25 /data/devel/jdk-25.0.2+10, worktree work/gradle-9.8, branch
+  gradle-9.8 = tag v9.8.1) failed in build-logic integration-testing: DependencyFactory.createProjectDependency(String),
+  a public API added in 9.5; 9.6.0 (branch gradle-9.6 = tag v9.6.0, worktree removed) fails the same way (its
+  build-logic already uses it); 9.5.0 build-logic does not use it (user choice: intermediate versions, no patch)
+* run: IGNORE_MIRROR=true scripts/try-build.py target/gradle-9.4 v9.5.0 gradle-9.5 --keep --no-script-fixes
+  --java /data/devel/jdk-17.0.20.1+1 --dist build/distributions/rebuilt-9.4
+  --task "-Porg.gradle.java.installations.auto-download=false install -Pgradle_installPath=build/distributions/rebuilt-9.4"
+* no source change needed
+* result (45m21s): the same jars as the official gradle-9.5.0-bin.zip (lib 406, lib/plugins 271, lib/agents 2);
+  default-imports, api-mapping, both plugin lists, instrumented-super-types, upgraded-properties and api-relocated
+  identical; -v and the sandbox hello-5.0 run
+* next: 9.8.1 directly with target/gradle-9.5 (JDK 25, Kotlin 2.4.10); if its build-logic needs 9.6-9.8 APIs, an
+  intermediate 9.6.0 or 9.7.0 (9.7.0 already needs JDK 25)
+
+=== 9.8.1 (scripts/GradleMinimalBootstrap98.java, copy of the 9.0 one; works)
+* why a minimal bootstrap again: 9.8.1 directly with target/gradle-9.4 fails (build-logic uses
+  DependencyFactory.createProjectDependency, a 9.5 API), with target/gradle-9.5 its build-logic needs Kotlin 2.4
+  libraries (shadow 9.5.1, kotlin-metadata-jvm, intellij-platform, kotlinx-serialization) while the build-platform pins
+  every Kotlin library to the Kotlin embedded in the running Gradle (9.5: 2.3.20); three one-line pin variants on the
+  gradle-9.8 branch failed (shadowJar reading Kotlin 2.4 metadata with a 2.2 library, then kotlin-stdlib 2.3.20 forced
+  by the running Gradle's precompiled script accessors): reverted, the branch stays at the tag
+* JDK 25 (/data/devel/jdk-25.0.2+10, given by the user): daemon JVM of the 9.8.1 build (gradle-daemon-jvm.properties),
+  compilation toolchain JDK 17 (-Porg.gradle.java.installations.paths=<jdk17>,<jdk25>: not auto-detected in /data/devel)
+* run: javac -d work/minimal-tools scripts/GradleMinimalBootstrap98.java (JDK 8), then
+  java -cp work/minimal-tools GradleMinimalBootstrap98 v9.8.1 --java /data/devel/jdk-17.0.20.1+1 > work/minimal-9.8.log
+  -> target/gradle-9.8.1-minimal (work dir work/minimal/gradle-9.8.1)
+* changes (script header): TOML version catalogs (libs, providedLibs, buildLibs + shared-versions.properties);
+  -source 17 (daemon-only modules target 17, Java 9+ syntax) with --add-exports of the jdk.compiler internals (Groovy
+  joint compile: -F-add-exports=..., -J values are a map); module registry .properties next to every jar (dependencies,
+  jarFile, alias); lib/api/gradle-public-api-legacy (empty jar, depends on all modules); launchable jars without
+  manifestClasspath get the whole runtime classpath (gradle-cli-main); build receipt scriptTemplateCommitId; empty
+  Kotlin multiplatform root jars completed by their -jvm artifact (configuration-cache-report); only .java files from
+  src/main/java (launcher has a stray .groovy test there); phase 1 Kotlin: a dependency with another sam-with-receiver
+  setting is used as classes, not sources
+* result: -v (Kotlin 2.4.10, Groovy 4.0.33, JVM 25), sandbox hello-5.0 and a build.gradle.kts work
+
+=== REL_9.8.1 rebuilt with target/gradle-9.8.1-minimal (branch gradle-9.8 = tag v9.8.1, no commit; installed: target/gradle-9.8.1, worktree work/gradle-9.8)
+* run: IGNORE_MIRROR=true scripts/try-build.py target/gradle-9.8.1-minimal v9.8.1 gradle-9.8 --keep --no-script-fixes
+  --java /data/devel/jdk-25.0.2+10 --dist build/distributions/rebuilt-minimal
+  --task "-Porg.gradle.java.installations.auto-download=false
+  -Porg.gradle.java.installations.paths=/data/devel/jdk-17.0.20.1+1,/data/devel/jdk-25.0.2+10
+  install -Pgradle_installPath=build/distributions/rebuilt-minimal"
+* no source change needed (the pin attempts with gradle-9.5 were reverted, never committed)
+* result (46m28s): the same jars as the official gradle-9.8.1-bin.zip (lib 430, lib/plugins 279, lib/agents 2,
+  lib/api 2); default-imports, api-mapping, both plugin lists, instrumented-super-types, upgraded-properties and
+  api-relocated identical, the module .properties (dependencies, aliases) identical; -v (Kotlin 2.4.10, Groovy 4.0.33,
+  JVM 25) and the sandbox hello-5.0 run
+* the chain reaches the latest release (9.8.1)
+* offline bootstrap (GradleMinimalBootstrap98 --download-only, added at the user's request): phase 1 (export, tools,
+  both Ivy resolutions) 6m12s, 1775 jars, 1.9 GB in the work dir; phase 2 (the same command without the option) run
+  under `unshare -rn` (no network interface at all) built a working distribution (-v: 9.8.1, Kotlin 2.4.10, Groovy
+  4.0.33): the bootstrap needs no network after phase 1
+* the real build offline (not done yet): it cannot reuse the Ivy downloads (other cache layout, no Gradle module
+  metadata, build-logic plugins not fetched); Gradle's own way: one online run with a dedicated GRADLE_USER_HOME, then
+  GRADLE_RO_DEP_CACHE=<that home>/caches + --offline
+
+== public binaries
+
+* the oldest Gradle binary that can still be downloaded is 0.7 (services.gradle.org/distributions, 534 versions);
+  0.1 to 0.6 were only on codehaus (gone): the chain builds them all from source
+
+== downloads over https with old builders
+
+* gradle-1.0 downloads with Apache HttpClient 4.1.2: on Java 7 it opens TLS connections without SNI, Maven Central
+  (and repo.gradle.org) refuse them: SSLPeerUnverifiedException: peer not authenticated
+  (-Djdk.tls.client.protocols=TLSv1.2 does not help; the 0.x builders used ivy with the JDK http client: no problem)
+* the same HttpClient 4.1.2 works on Java 8 (HTTP 200), but gradle-1.0 cannot build on Java 8:
+  JavaVersion.toVersion fails (ArrayIndexOutOfBoundsException: 7, it knows Java up to 1.7)
+* scripts/maven-proxy.py: http://localhost:8765/maven2/ (Maven Central), /gradle-libs-releases/,
+  /gradle-libs-milestones/, /gradle-libs/ (repo.gradle.org), cache in work/maven-proxy-cache;
+  try-build.py --maven-proxy starts it for the build; the alternate build files point to it
+* from a builder that runs on Java 8 (Gradle 2.0+), the proxy should not be needed anymore
+* repo.gradle.org/gradle/libs-releases does not mirror Maven Central anymore (3.0 only declares repo.gradle.org)

@@ -1,0 +1,50 @@
+= gradle versions
+
+== versions of the major releases
+Bundled Groovy, language of Gradle's own build scripts, Java needed to run Gradle, JDK needed to build Gradle
+(from the tags of ./gradle, scripts/versions-table.py gives the table per minor release). A change of Groovy
+or Java may need an extra step at the version where it changes (Groovy changes at 2.0, 2.8, 5.0, 7.0, 9.0).
+
+[cols="1,1,2,1,2"]
+|===
+| Gradle	| Groovy	| Gradle's own build scripts			| Java to run	| JDK to build Gradle
+
+| 1.0		| 1.8.6		| Groovy					| 5		|
+| 2.0		| 2.3.3		| Groovy					| 6		|
+| 3.0		| 2.4.7		| Groovy (Kotlin from 3.3)			| 7		|
+| 4.0		| 2.4.11	| Groovy + Kotlin (Kotlin only from 4.10)	| 7		| 8
+| 5.0		| 2.5.4		| Kotlin					| 8		| 9/10
+| 6.0		| 2.5.8		| Kotlin					| 8		| 11
+| 7.0		| 3.0.7		| Kotlin					| 8		| 11
+| 8.0		| 3.0.13	| Kotlin					| 8		| 11 (17 from 8.12)
+| 9.0		| 4.0.27	| Kotlin (Kotlin 2.2)				| 17		| 17
+| 9.4		| 4.0.29	| Kotlin (Kotlin 2.3)				| 17		| 17
+| 9.5		| 4.0.29	| Kotlin (Kotlin 2.3)				| 17		| 17
+| 9.8		| 4.0.33	| Kotlin (Kotlin 2.4)				| 17		| 25 (daemon), 17 (toolchain)
+|===
+
+* latest release: 9.8.1 (in the local clone of ./gradle)
+
+== Kotlin DSL and Gradle 4.10
+Gradle's own build moves from Groovy to Kotlin build scripts between 4.x and 5.0, so the builder has to
+run the Kotlin DSL version that the next build was written for.
+
+[cols="1,2,2,2"]
+|===
+| Gradle	| bundled Kotlin DSL				| Gradle's own build scripts (.gradle.kts / .gradle)	| written for (wrapper)
+
+| 3.0		| gradle-script-kotlin 0.3.0 (Kotlin 1.1-M01)	| 0 / Groovy only					| 3.0 snapshot
+| 4.0		| gradle-script-kotlin 0.9.0 (Kotlin 1.1.0)	| 0 / 122						| 4.0-rc-3
+| 4.5		| gradle-kotlin-dsl 0.14.2			| 3 / 119						| 4.5-rc-2
+| 4.10		| gradle-kotlin-dsl 1.0-rc-3 (Kotlin 1.2.60)	| 56 / 62						| 4.10-rc-3
+| 5.0		| gradle-kotlin-dsl 1.0.4			| 85 / 38						| 5.0-rc-5
+|===
+
+* the Kotlin DSL changed a lot before 1.0 (gradle-script-kotlin up to 0.9.x, renamed gradle-kotlin-dsl from 0.10): the
+  Kotlin scripts of 5.0 (and its Kotlin buildSrc) are written for Kotlin DSL 1.0, our 4.0 bundles 0.9.0
+* plan: build 4.10 (its scripts are about half Kotlin, written for Kotlin DSL 1.0-rc) before 5.0, then 4.10
+  (Kotlin DSL 1.0-rc-3) builds 5.0
+* 3.0 was built without Kotlin (Kotlin 1.1-M01 is on no repository anymore), 4.0 and later have it
+  (gradle-kotlin-dsl 1.0-rc-3 and 1.0.4 are on repo.gradle.org, their Kotlin on Maven Central)
+* 5.0 compiles with JDK 9+ (java9Home property), the build itself can run on Java 8: run the builder on Java 8,
+  compile with JDK 11 (the newest JDK that still compiles for Java 6, needed by the wrapper and the tooling API)

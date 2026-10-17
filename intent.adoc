@@ -1,0 +1,53 @@
+= build gradle from scratch
+
+== already installed
+* java7
+** JAVA_HOME=/data/devel/zulu7.56.0.11-ca-jdk7.0.352-linux_x64
+* newer version of java are also available for building more recent version
+** java 8: /data/devel/jdk8u482-b08 (runs the builders from gradle-2.0 on)
+** java 11: /data/devel/jdk-11.0.30+7 (compiles 5.0: java9Home property)
+** java 17: /data/devel/jdk-17.0.20.1+1 (builds Gradle from 8.12 on)
+** java 25: /data/devel/jdk-25.0.2+10 (daemon JVM of the Gradle 9.8 build)
+* compatible ant version
+** ANT_HOME=/data/devel/apache-ant-1.9.16
+* a checkout of the gradle git repo is in ./gradle
+
+== goal
+I want to build gradle from scratch
+I don't care about building the doc
+I don't care about running the tests
+There is an old version of gradle that builds on ant
+Then, further versions of gradle builds on previous versions of gradle
+
+== assumptions
+* some dependencies are missing from maven central
+* I can find them back
+** for example, using https://repo.gradle.org
+
+== question
+* What is the git commit that allows to build on ant ?
+* What is the number of steps for building the latest gradle ?
+** for example:
+*** ant builds 0.7
+*** 0.7 builds 0.8
+*** 0.8 builds 0.9
+*** and so on until the latest version
+* I guess, requirements from the git repo indicates what is the required version of gradle to build the current version
+
+== method
+* build each version in ./target/gradle-x.y directory
+* when changes are required on the source, create a branch from the version tag (branch: gradle-x.y or gradle-x.y.z)
+* the ant bootstrap commit (e09125febb2) has no version tag
+** name: gradle-0.0 (branch and ./target/gradle-0.0)
+** commit the local changes needed for the ant build on that branch
+* some steps may not be a release (a release is often built with its own rc or a snapshot)
+** rc tag: gradle-x.y-rc-n (for example v9.4.0-RC2 gives gradle-9.4.0-rc-2)
+** untagged commit: gradle-x.y-<short commit hash> (x.y is the next release)
+* tag prefixes change over time (REL-0.x, REL_0.9 to REL_3.x, vX.Y.Z), the name drops the prefix
+* keep a log of the successful build steps in ./build-log.adoc, one line per step
+** format: gradle-x.y from branch gradle-x.y allowed to build gradle-a.b
+** the source changes are not logged, they are in the git branches
+* builders that cannot download over https (Gradle 1.x on Java 7: HttpClient 4.1 sends no SNI, refused by
+  Maven Central; Gradle 1.x cannot build on Java 8): scripts/maven-proxy.py serves the repositories over plain
+  http on localhost:8765 (try-build.py --maven-proxy), the alternate build files use it
+
