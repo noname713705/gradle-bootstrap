@@ -38,6 +38,40 @@
 ** apply the patches needed to the offcial gradle source
 ** build the patched gradle source re-using the dependencies we already fetched
 
+== a run script
+* create minimal tools directory
+* compile the bootstrap java class
+* launch the minimal gradle compilation (needs network: downloads)
+* set the JDK expected by gradle-8.0: jdk-11
+* verify the bootstraped version
+* run the script for branch creation and applying patches
+* run the official build with the bootstraped gradle
+** with python
+** or with gradle directly
+* copy the gradle distribution to the expected dir (target/gradle-8.0 must not exist yet)
+* verify the official version that has been built
+
+----
+mkdir -p work/minimal-tools
+/data/devel/jdk8u482-b08/bin/javac -d work/minimal-tools scripts/GradleMinimalBootstrap80.java
+/data/devel/jdk8u482-b08/bin/java -cp work/minimal-tools GradleMinimalBootstrap80 v8.0.0 --java /data/devel/jdk-11.0.30+7 > work/minimal-8.0.log
+# reset JAVA_HOME and PATH according to what gradle-8.0 expects : jdk-11
+export JAVA_HOME=/data/devel/jdk-11.0.30+7
+./target/gradle-8.0-minimal/bin/gradle -v
+# create the branch and patch the sources
+./scripts/create-branches.sh gradle-8.0
+# try the actual build
+IGNORE_MIRROR=true ./scripts/try-build.py target/gradle-8.0-minimal v8.0.0 gradle-8.0 --keep --no-script-fixes \
+  --java /data/devel/jdk-11.0.30+7 --dist build/distributions/rebuilt-minimal \
+  --task "-Porg.gradle.java.installations.auto-download=false install -Pgradle_installPath=build/distributions/rebuilt-minimal"
+# or, with gradle directly
+(cd work/gradle-8.0 && IGNORE_MIRROR=true ../../target/gradle-8.0-minimal/bin/gradle \
+  -Porg.gradle.java.installations.auto-download=false install -Pgradle_installPath=build/distributions/rebuilt-minimal)
+# copy the built distribution
+cp -rp work/gradle-8.0/build/distributions/rebuilt-minimal target/gradle-8.0
+./target/gradle-8.0/bin/gradle -v
+----
+
 == How to run it ?
 * the scripts are in `scripts/GradleMinimalBootstrap*.java`
 
