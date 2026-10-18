@@ -1,0 +1,2719 @@
+From 7e464a80bbd76d9bba213e836c9403267b2384bb Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Tue, 13 Oct 2026 14:54:35 +0200
+Subject: [PATCH] Build Gradle 2.0 with Gradle 1.0 (no docs, no tests)
+
+Alternate build files in the Gradle 1.0 DSL (settings.gradle.1.0 and
+*.gradle.1.0), the original build files are untouched. buildSrc/settings.gradle
+selects buildSrc/build.gradle.1.0 only when the running Gradle is 1.0.
+Downloads go through scripts/maven-proxy.py (Gradle 1.0 on Java 7 sends no SNI).
+default-imports.txt is generated in core (docs project not built).
+Maven Central URL: https, no trailing slash.
+
+Run: -c settings.gradle.1.0 clean :distributions:explodedDist
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build.gradle.1.0                              | 197 ++++++++++++++++++
+ buildSrc/build.gradle.1.0                     |  52 +++++
+ buildSrc/settings.gradle                      |   7 +
+ gradle/buildReceipt.gradle.1.0                | 138 ++++++++++++
+ gradle/compile.gradle.1.0                     |  11 +
+ gradle/dependencies.gradle.1.0                | 165 +++++++++++++++
+ gradle/groovyProject.gradle.1.0               | 102 +++++++++
+ gradle/providedConfiguration.gradle.1.0       |  21 ++
+ gradle/versioning.gradle.1.0                  |  57 +++++
+ settings.gradle.1.0                           |  75 +++++++
+ subprojects/announce/announce.gradle.1.0      |  24 +++
+ subprojects/antlr/antlr.gradle.1.0            |  29 +++
+ .../base-services-groovy.gradle.1.0           |  25 +++
+ .../base-services/base-services.gradle.1.0    |  15 ++
+ .../build-comparison.gradle.1.0               |  40 ++++
+ subprojects/build-init/build-init.gradle.1.0  |  67 ++++++
+ subprojects/cli/cli.gradle.1.0                |  28 +++
+ .../code-quality/code-quality.gradle.1.0      |  38 ++++
+ subprojects/core-impl/core-impl.gradle.1.0    |  82 ++++++++
+ subprojects/core/core.gradle.1.0              | 144 +++++++++++++
+ .../ArtifactRepositoryContainer.java          |   2 +-
+ subprojects/cpp/cpp.gradle.1.0                |  31 +++
+ .../diagnostics/diagnostics.gradle.1.0        |  27 +++
+ .../distributions/distributions.gradle.1.0    |  91 ++++++++
+ subprojects/ear/ear.gradle.1.0                |  24 +++
+ subprojects/ide/ide.gradle.1.0                |  37 ++++
+ subprojects/ivy/ivy.gradle.1.0                |  31 +++
+ subprojects/jacoco/jacoco.gradle.1.0          |  28 +++
+ subprojects/javascript/javascript.gradle.1.0  |  31 +++
+ subprojects/jetty/jetty.gradle.1.0            |  45 ++++
+ .../language-base/language-base.gradle.1.0    |   8 +
+ .../language-jvm/language-jvm.gradle.1.0      |   9 +
+ subprojects/launcher/launcher.gradle.1.0      |  79 +++++++
+ subprojects/maven/maven.gradle.1.0            |  37 ++++
+ subprojects/messaging/messaging.gradle.1.0    |  10 +
+ subprojects/native/native.gradle.1.0          |  21 ++
+ subprojects/open-api/open-api.gradle.1.0      |   8 +
+ subprojects/osgi/osgi.gradle.1.0              |  28 +++
+ subprojects/plugin-use/plugin-use.gradle.1.0  |  27 +++
+ subprojects/plugins/plugins.gradle.1.0        |  62 ++++++
+ subprojects/publish/publish.gradle.1.0        |  29 +++
+ subprojects/reporting/reporting.gradle.1.0    |  12 ++
+ .../resources-http/resources-http.gradle.1.0  |  29 +++
+ subprojects/resources/resources.gradle.1.0    |  16 ++
+ subprojects/scala/scala.gradle.1.0            |  40 ++++
+ subprojects/signing/signing.gradle.1.0        |  30 +++
+ subprojects/sonar/sonar.gradle.1.0            |  47 +++++
+ .../tooling-api/tooling-api.gradle.1.0        |  46 ++++
+ subprojects/ui/ui.gradle.1.0                  |  31 +++
+ subprojects/wrapper/wrapper.gradle.1.0        |  45 ++++
+ 50 files changed, 2277 insertions(+), 1 deletion(-)
+ create mode 100644 build.gradle.1.0
+ create mode 100644 buildSrc/build.gradle.1.0
+ create mode 100644 buildSrc/settings.gradle
+ create mode 100644 gradle/buildReceipt.gradle.1.0
+ create mode 100644 gradle/compile.gradle.1.0
+ create mode 100644 gradle/dependencies.gradle.1.0
+ create mode 100644 gradle/groovyProject.gradle.1.0
+ create mode 100644 gradle/providedConfiguration.gradle.1.0
+ create mode 100644 gradle/versioning.gradle.1.0
+ create mode 100644 settings.gradle.1.0
+ create mode 100644 subprojects/announce/announce.gradle.1.0
+ create mode 100644 subprojects/antlr/antlr.gradle.1.0
+ create mode 100644 subprojects/base-services-groovy/base-services-groovy.gradle.1.0
+ create mode 100644 subprojects/base-services/base-services.gradle.1.0
+ create mode 100644 subprojects/build-comparison/build-comparison.gradle.1.0
+ create mode 100644 subprojects/build-init/build-init.gradle.1.0
+ create mode 100644 subprojects/cli/cli.gradle.1.0
+ create mode 100644 subprojects/code-quality/code-quality.gradle.1.0
+ create mode 100644 subprojects/core-impl/core-impl.gradle.1.0
+ create mode 100644 subprojects/core/core.gradle.1.0
+ create mode 100644 subprojects/cpp/cpp.gradle.1.0
+ create mode 100644 subprojects/diagnostics/diagnostics.gradle.1.0
+ create mode 100644 subprojects/distributions/distributions.gradle.1.0
+ create mode 100644 subprojects/ear/ear.gradle.1.0
+ create mode 100644 subprojects/ide/ide.gradle.1.0
+ create mode 100644 subprojects/ivy/ivy.gradle.1.0
+ create mode 100644 subprojects/jacoco/jacoco.gradle.1.0
+ create mode 100644 subprojects/javascript/javascript.gradle.1.0
+ create mode 100644 subprojects/jetty/jetty.gradle.1.0
+ create mode 100644 subprojects/language-base/language-base.gradle.1.0
+ create mode 100644 subprojects/language-jvm/language-jvm.gradle.1.0
+ create mode 100644 subprojects/launcher/launcher.gradle.1.0
+ create mode 100644 subprojects/maven/maven.gradle.1.0
+ create mode 100644 subprojects/messaging/messaging.gradle.1.0
+ create mode 100644 subprojects/native/native.gradle.1.0
+ create mode 100644 subprojects/open-api/open-api.gradle.1.0
+ create mode 100644 subprojects/osgi/osgi.gradle.1.0
+ create mode 100644 subprojects/plugin-use/plugin-use.gradle.1.0
+ create mode 100644 subprojects/plugins/plugins.gradle.1.0
+ create mode 100644 subprojects/publish/publish.gradle.1.0
+ create mode 100644 subprojects/reporting/reporting.gradle.1.0
+ create mode 100644 subprojects/resources-http/resources-http.gradle.1.0
+ create mode 100644 subprojects/resources/resources.gradle.1.0
+ create mode 100644 subprojects/scala/scala.gradle.1.0
+ create mode 100644 subprojects/signing/signing.gradle.1.0
+ create mode 100644 subprojects/sonar/sonar.gradle.1.0
+ create mode 100644 subprojects/tooling-api/tooling-api.gradle.1.0
+ create mode 100644 subprojects/ui/ui.gradle.1.0
+ create mode 100644 subprojects/wrapper/wrapper.gradle.1.0
+
+diff --git a/build.gradle.1.0 b/build.gradle.1.0
+new file mode 100644
+index 00000000000..8242858b3c3
+--- /dev/null
++++ b/build.gradle.1.0
+@@ -0,0 +1,197 @@
++// build.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++import org.gradle.build.Install
++import org.gradle.build.BuildTypes
++import org.gradle.build.TestReportAggregator
++
++
++defaultTasks 'assemble'
++apply plugin: 'java-base'
++archivesBaseName = 'gradle'
++
++extensions.buildTypes = new BuildTypes(project)
++
++buildTypes {
++    sanityCheck "classes", "doc:checkstyleApi", "codeQuality", "docs:check"
++
++    // The minimum to be run before check-in
++    preCommitBuild "doc:checkstyleApi", "docs:check", "codeQuality", "classes", "test"
++    quickCheck "doc:checkstyleApi", "docs:check", "codeQuality", "classes", "test"
++
++    // For testing pull requests
++    pullRequestValidation "doc:checkstyleApi", "docs:check", "codeQuality", "classes"
++
++    // A full (in-process) test
++    developerBuild "check"
++
++    // Used by the first phase of the build pipeline
++    quickTest "runtimeTests", "runtimeIntegTests"
++
++    // Used for builds to run all tests, but not necessarily on all platforms
++    fullTest "runtimeTests", "runtimeIntegTests", useIncomingDistributions: true, defaultIntegTestExecuter: "forking"
++
++    // Used for builds to test the code on certain platforms
++    platformTest "runtimeTests", "runtimeIntegTests", useIncomingDistributions: true, defaultIntegTestExecuter: "forking", testAllPlatforms: true
++
++    // Tests using the daemon mode
++    daemonTest "runtimeIntegTests", useIncomingDistributions: true, defaultIntegTestExecuter: "daemon"
++
++    // Run the integration tests using the parallel executer
++    parallelTest "runtimeIntegTests", useIncomingDistributions: true, defaultIntegTestExecuter: "parallel"
++
++    // Run the performance tests
++    performanceTest "performance:integTest", useIncomingDistributions: true
++
++    // Run the performance tests
++    localPerformanceTest "performance:integTest"
++
++    // Used for cross version tests on CI
++    crossVersionTest "crossVersionIntegTest", useIncomingDistributions: true
++
++    // Used to build production distros and smoke test them
++    packageBuild "verifyIsProductionBuildEnvironment", "clean", "buildDists", "distributions:integTest"
++
++    // Used to build production distros and smoke test them
++    promotionBuild "verifyIsProductionBuildEnvironment", "clean", "docs:check", "buildDists", "distributions:integTest", "uploadArchives"
++}
++
++ext {
++    jvm = org.gradle.internal.jvm.Jvm.current()
++    javaVersion = JavaVersion.current()
++    isCiServer = System.getenv().containsKey("TEAMCITY_VERSION")
++    isWindows = org.gradle.internal.os.OperatingSystem.current().windows
++
++    if (project.hasProperty("maxParallelForks")) {
++        project.maxParallelForks = Integer.valueOf(project.maxParallelForks, 10)
++    } else {
++        ext.maxParallelForks = Math.max(2, (int) (Runtime.runtime.availableProcessors() / 2))
++    }
++
++    if (project.hasProperty("useIncomingDistributions")) {
++        project.useIncomingDistributions = true
++    } else {
++        ext.useIncomingDistributions = false
++    }
++
++    internalProjects = subprojects.findAll { it.name.startsWith("internal") || it.name in ["integTest", "distributions"] }
++    groovyProjects = subprojects
++    publicGroovyProjects = groovyProjects - internalProjects
++    pluginProjects = [
++        'plugins', 'codeQuality', 'jetty', 'antlr', 'wrapper', 'osgi', 'maven',
++        'ide', 'announce', 'scala', 'sonar', 'signing', 'cpp', 'ear', 'javascript', 'buildComparison',
++        'diagnostics', 'reporting', 'publish', 'ivy', 'jacoco', 'buildInit', 'languageJvm', 'languageBase'
++    ].collect {
++        publishedProjects = [project(':core'), project(':toolingApi'), project(':wrapper'), project(':baseServices'), project(':messaging'), project(':resources')]
++        project(it)
++    }
++}
++
++apply from: "gradle/buildReceipt.gradle.1.0"
++// apply from: "gradle/incomingDistributions.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++apply from: "gradle/versioning.gradle.1.0"
++apply from: "gradle/dependencies.gradle.1.0"
++// apply from: "gradle/wrapper.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++// apply from: "gradle/idea.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++// apply from: "gradle/eclipse.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++// apply from: "gradle/classycle.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++// apply from: "gradle/noDependencyResolutionDuringConfiguration.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++// apply from: "gradle/testSetup.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++// apply from: "gradle/testGroupings.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++// apply from: "gradle/analytics.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++
++allprojects {
++    group = 'org.gradle'
++
++    repositories {
++        // repo.gradle.org/gradle/libs does not mirror Maven Central anymore: Maven Central first (through the proxy)
++        maven { url 'http://localhost:8765/maven2' }
++        maven { url 'http://localhost:8765/gradle-libs' } // through scripts/maven-proxy.py (gradle-1.0: no https without SNI on Java 7)
++    }
++}
++
++subprojects {
++    version = rootProject.version
++
++    if (project in groovyProjects) {
++        apply from: "$rootDir/gradle/groovyProject.gradle.1.0"
++        // apply from: "$rootDir/gradle/testWithUnknownOS.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++        check.dependsOn ":docs:checkstyleApi"
++        check.dependsOn "codeQuality"
++    }
++
++    if (project in publishedProjects) {
++        // apply from: "$rootDir/gradle/publish.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++    }
++
++    // apply from: "$rootDir/gradle/codeQuality.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++
++    if (isCiServer) {
++        reporting.baseDir "$rootProject.reporting.baseDir/${path.replaceFirst(':', '').replaceAll(':', '.')}"
++    }
++}
++
++configurations {
++    runtime {
++        visible = false
++    }
++    gradlePlugins {
++        visible = false
++    }
++    testRuntime {
++        extendsFrom runtime
++        extendsFrom gradlePlugins
++    }
++}
++
++dependencies {
++    runtime project(':launcher')
++    runtime project(':wrapper')
++    gradlePlugins pluginProjects
++    gradlePlugins project(':coreImpl')
++    gradlePlugins project(':pluginUse')
++}
++
++task verifyIsProductionBuildEnvironment << {
++    assert javaVersion.java7 : "Must use a Java 7 compatible JVM to perform this build. Current JVM is ${jvm}"
++    def systemCharset = java.nio.charset.Charset.defaultCharset().name()
++    assert systemCharset == "UTF-8" : "Platform encoding must be UTF-8. Is currently $systemCharset. Set -Dfile.encoding=UTF-8."
++}
++
++task waitForDaemonsToDie {
++    if (!project.hasProperty("noWaitForDaemonsToDie")) {
++        if (isWindows && isCiServer && buildTypes.activeNames.contains("crossVersionTest")) {
++            gradle.startParameter.taskNames.add(0, it.path)
++        }
++        doLast {
++            def mins = 2
++            println "I'm waiting for $mins mins so that existing daemons can die with honour. It's a workaround until we fix it properly."
++            sleep mins * 60 * 1000
++        }
++    }
++}
++
++// task aggregateTestReports: not used for the bootstrap (the distribution is distributions:explodedDist)
++
++evaluationDependsOn ":distributions"
++
++// task install: not used for the bootstrap (the distribution is distributions:explodedDist)
++
++// task installAll: not used for the bootstrap (the distribution is distributions:explodedDist)
++
++
++// apply from: "gradle/intTestImage.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
+\ No newline at end of file
+diff --git a/buildSrc/build.gradle.1.0 b/buildSrc/build.gradle.1.0
+new file mode 100644
+index 00000000000..510221af664
+--- /dev/null
++++ b/buildSrc/build.gradle.1.0
+@@ -0,0 +1,52 @@
++// buildSrc/build.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++apply plugin: 'groovy'
++// checkstyle, codenarc, idea, eclipse not used for the bootstrap
++
++repositories {
++    // gradle-1.0 cannot reach Maven Central / repo.gradle.org over https on Java 7 (HttpClient 4.1, no SNI):
++    // through scripts/maven-proxy.py (http://localhost:8765, try-build.py --maven-proxy)
++    maven { url 'http://localhost:8765/maven2' }
++    maven { url 'http://localhost:8765/gradle-libs' }
++}
++
++dependencies {
++    compile gradleApi()
++    compile 'com.google.guava:guava-jdk5:14.0.1@jar'
++    compile 'commons-lang:commons-lang:2.6@jar'
++    compile localGroovy()
++    testCompile 'junit:junit:4.11@jar'
++    testCompile 'org.spockframework:spock-core:0.7-groovy-2.0@jar', 'cglib:cglib-nodep:2.2', 'org.objenesis:objenesis:1.2'
++
++    compile "org.pegdown:pegdown:1.1.0"
++    compile "org.jsoup:jsoup:1.6.3"
++
++    //below dependency was deployed to the repo.gradle.org
++    //it's built from sources at: https://github.com/szczepiq/jarjar
++    //if code changes are needed in this library we need to figure out a better way of distributing them.
++    compile "org.gradle.jarjar:jarjar:1.2.1"
++}
++apply from: '../gradle/compile.gradle.1.0'
++// codeQuality.gradle, classycle.gradle not used for the bootstrap
++
++// bootstrap: the documentation helpers (org.gradle.build.docs) are not compiled, docs are not built;
++// tests are not compiled nor run
++compileGroovy.exclude 'org/gradle/build/docs/**'
++// jsoup and pegdown plugins: used by the docs project only (JsoupCopyExtension needs ClosureBackedAction, 2.0 internal)
++compileGroovy.exclude 'org/gradle/plugins/jsoup/**', 'org/gradle/plugins/pegdown/**'
++[compileTestJava, compileTestGroovy, processTestResources, test]*.enabled = false
+diff --git a/buildSrc/settings.gradle b/buildSrc/settings.gradle
+new file mode 100644
+index 00000000000..75930a84a82
+--- /dev/null
++++ b/buildSrc/settings.gradle
+@@ -0,0 +1,7 @@
++// Bootstrap only (branch of v2.0.0): built by gradle-1.0 from build files in the 1.0 DSL
++// (see settings.gradle.1.0). gradle-1.0 builds buildSrc before any settings script and only from this
++// directory: this file points it to build.gradle.1.0. Any other Gradle (the bootstrapped version itself,
++// later versions) keeps the default build.gradle.
++if (gradle.gradleVersion.startsWith('1.0')) {
++    rootProject.buildFileName = 'build.gradle.1.0'
++}
+diff --git a/gradle/buildReceipt.gradle.1.0 b/gradle/buildReceipt.gradle.1.0
+new file mode 100644
+index 00000000000..170d04360c9
+--- /dev/null
++++ b/gradle/buildReceipt.gradle.1.0
+@@ -0,0 +1,138 @@
++// gradle/buildReceipt.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2012 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++import org.gradle.internal.os.OperatingSystem
++
++ext {
++    buildReceiptFileName = "build-receipt.properties"
++
++    readBuildReceipt = { buildReceiptFile ->
++        buildReceiptFile = file(buildReceiptFile)
++        if (!buildReceiptFile.exists()) {
++            throw new GradleException("Can't read build receipt file '$buildReceiptFile' as it doesn't exist")
++        }
++        buildReceiptFile.withInputStream {
++            def p = new Properties()
++            p.load(it)
++            p
++        }
++    }
++}
++
++task determineCommitId {
++    ext.commitId = null
++
++    doLast {
++        def strategies = []
++
++        def env = System.getenv()
++
++        // Builds of Gradle happening on the CI server
++        strategies << {
++            env["BUILD_VCS_NUMBER"]
++        }
++
++        // For the discovery builds, this points to the Gradle revision
++        strategies << {
++            env.find { it.key.startsWith("BUILD_VCS_NUMBER_Gradle_Master") }?.value
++        }
++
++        // For the discovery release builds, this points to the Gradle revision
++        strategies << {
++            env.find { it.key.startsWith("BUILD_VCS_NUMBER_Gradle_release_branch") }?.value
++        }
++
++        // If it's a checkout, ask Git for it
++        strategies << {
++            if (file(".git").exists()) { // bootstrap: in a git worktree .git is a file (.git/HEAD does not exist)
++                def baos = new ByteArrayOutputStream()
++                def execResult = exec {
++                    ignoreExitValue = true
++                    commandLine = ["git", "log", "-1", "--format=%H"]
++                    if (OperatingSystem.current().windows) {
++                        commandLine = ["cmd", "/c"] + commandLine
++                    }
++
++                    standardOutput = baos
++                }
++                if (execResult.exitValue == 0) {
++                    new String(baos.toByteArray(), "utf8").trim()
++                } else {
++                    // Read commit id directly from filesystem
++                    def headRef = file(".git/HEAD").text
++                    headRef = headRef.replaceAll('ref: ', '').trim()
++                    file(".git/$headRef").text.trim()
++                }
++            } else {
++                null
++            }
++        }
++
++        // It's a source distribution, we don't know.
++        strategies << {
++            if (!file("design-docs").directory) {
++                "<unknown>"
++            }
++        }
++
++        for (strategy in strategies) {
++            commitId = strategy()
++            if (commitId) {
++                break
++            }
++        }
++        if (!commitId) {
++            throw new InvalidUserDataException("Could not determine commit id")
++        }
++    }
++}
++
++task createBuildReceipt(dependsOn: determineCommitId) {
++    ext.receiptFile = file("$buildDir/$buildReceiptFileName")
++    outputs.file receiptFile
++    outputs.upToDateWhen { false }
++    doLast {
++        def hostName
++        try {
++            hostName = InetAddress.localHost.hostName
++        } catch (UnknownHostException e) {
++            hostName = "unknown"
++        }
++        def data = [
++                commitId: determineCommitId.commitId,
++                versionNumber: version,
++                versionBase: versionBase,
++                isSnapshot: isSnapshot,
++                rcNumber: rcNumber == null ? "" : rcNumber,
++                buildTimestamp: buildTimestamp,
++                buildNumber: System.properties["build.number"] ?: 'none',
++                username: System.properties["user.name"],
++                hostname: hostName,
++                javaVersion: System.properties["java.version"],
++                osName: System.properties["os.name"],
++                osVersion: System.properties["os.version"],
++                project: 'gradle'
++        ]
++
++        receiptFile.parentFile.mkdirs()
++
++        // We write this out ourself instead of using the properties class to avoid the
++        // annoying timestamp that insists on placing in there, that throws out incremental.
++        def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
++        receiptFile.setText(content, "ISO-8859-1")
++    }
++}
+diff --git a/gradle/compile.gradle.1.0 b/gradle/compile.gradle.1.0
+new file mode 100644
+index 00000000000..4447ebbc184
+--- /dev/null
++++ b/gradle/compile.gradle.1.0
+@@ -0,0 +1,11 @@
++// gradle/compile.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++// gradle-1.0 builder: Compile (JavaCompile from 1.1)
++tasks.withType(Compile) {
++    options.encoding = 'utf-8'
++    options.compilerArgs = ['-Xlint:-options']
++}
++tasks.withType(GroovyCompile) {
++    options.encoding = 'utf-8'
++    options.compilerArgs = ['-Xlint:-options']
++    groovyOptions.encoding = 'utf-8'
++}
+diff --git a/gradle/dependencies.gradle.1.0 b/gradle/dependencies.gradle.1.0
+new file mode 100644
+index 00000000000..56df5733d18
+--- /dev/null
++++ b/gradle/dependencies.gradle.1.0
+@@ -0,0 +1,165 @@
++// gradle/dependencies.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2012 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++ext {
++    versions = [:]
++    libraries = [:]
++}
++
++versions.commons_io = 'commons-io:commons-io:1.4'
++
++libraries.ant = dependencies.module('org.apache.ant:ant:1.9.3') {
++    dependency 'org.apache.ant:ant-launcher:1.9.3@jar'
++}
++
++libraries.asm =  'org.ow2.asm:asm-all:5.0.2'
++libraries.commons_cli = 'commons-cli:commons-cli:1.2@jar'
++libraries.commons_io = dependencies.module(versions.commons_io)
++libraries.commons_lang = 'commons-lang:commons-lang:2.6@jar'
++libraries.commons_collections = 'commons-collections:commons-collections:3.2.1@jar'
++libraries.jsch = "com.jcraft:jsch:0.1.51"
++libraries.ivy = dependencies.module('org.apache.ivy:ivy:2.2.0'){
++    dependency libraries.jsch
++}
++libraries.jcip = "net.jcip:jcip-annotations:1.0@jar"
++libraries.inject = dependencies.module('javax.inject:javax.inject:1')
++
++// Logging
++libraries.slf4j_api = dependencies.module('org.slf4j:slf4j-api:1.7.5')
++libraries.jcl_to_slf4j = dependencies.module('org.slf4j:jcl-over-slf4j:1.7.5') {
++    dependency libraries.slf4j_api
++}
++libraries.jul_to_slf4j = dependencies.module('org.slf4j:jul-to-slf4j:1.7.5') {
++    dependency libraries.slf4j_api
++}
++libraries.log4j_to_slf4j = dependencies.module('org.slf4j:log4j-over-slf4j:1.7.5') {
++    dependency libraries.slf4j_api
++}
++libraries.logback_core = dependencies.module('ch.qos.logback:logback-core:1.0.13')
++libraries.logback_classic = dependencies.module('ch.qos.logback:logback-classic:1.0.13') {
++    dependency libraries.logback_core
++    dependency libraries.slf4j_api
++}
++
++// Jetty
++libraries.servlet_api = "org.mortbay.jetty:servlet-api:2.5-20081211@jar"
++libraries.jetty_util = dependencies.module("org.mortbay.jetty:jetty-util:6.1.25") {
++    dependency libraries.slf4j_api
++    dependency libraries.servlet_api
++}
++libraries.jetty = dependencies.module("org.mortbay.jetty:jetty:6.1.25") {
++    dependency libraries.jetty_util
++    dependency libraries.servlet_api
++}
++
++libraries.commons_httpclient = dependencies.module('org.apache.httpcomponents:httpclient:4.2.2') {
++    dependency "org.apache.httpcomponents:httpcore:4.2.2@jar"
++    dependency libraries.jcl_to_slf4j
++    dependency "commons-codec:commons-codec:1.6@jar"
++    dependency "jcifs:jcifs:1.3.17@jar" /* org.samba.jcifs is not on Maven Central; jar only: its pom pulls servlet-api 2.4 */
++}
++
++libraries.maven_ant_tasks = dependencies.module("org.apache.maven:maven-ant-tasks:2.1.3") {
++    libraries.ant
++}
++
++libraries += [
++        ant_antlr: 'org.apache.ant:ant-antlr:1.9.3@jar',
++        antlr: 'antlr:antlr:2.7.7@jar',
++        dom4j: 'dom4j:dom4j:1.6.1@jar',
++        guava: 'com.google.guava:guava-jdk5:17.0@jar',
++        jsr305: 'com.google.code.findbugs:jsr305:1.3.9@jar',
++        groovy: 'org.codehaus.groovy:groovy-all:2.3.3',
++        jaxen: 'jaxen:jaxen:1.1@jar',
++        jcip: "net.jcip:jcip-annotations:1.0@jar",
++        jna: 'net.java.dev.jna:jna:3.2.7@jar',
++        junit: 'junit:junit:4.11@jar',
++        xmlunit: 'xmlunit:xmlunit:1.3',
++        nekohtml: 'net.sourceforge.nekohtml:nekohtml:1.9.14',
++        xbean: 'org.apache.xbean:xbean-reflect:3.4@jar', //required by maven3 classes
++        nativePlatform: 'net.rubygrapefruit:native-platform:0.10',
++        xerces: "xerces:xercesImpl:2.9.1",
++        objenesis: 'org.objenesis:objenesis:1.2@jar',
++        jsoup:'org.jsoup:jsoup:1.6.3'
++]
++
++libraries.maven3 = dependencies.module("org.apache.maven:maven-core:3.0.4") {
++    dependency "org.apache.maven:maven-settings:3.0.4@jar"
++    dependency "org.apache.maven:maven-settings-builder:3.0.4@jar"
++
++    //plexus:
++    dependency "org.codehaus.plexus:plexus-utils:2.0.6@jar"
++    dependency "org.codehaus.plexus:plexus-interpolation:1.14@jar"
++    dependency "org.codehaus.plexus:plexus-component-annotations:1.5.5@jar"
++    dependency "org.codehaus.plexus:plexus-container-default:1.5.5@jar"
++    dependency "org.codehaus.plexus:plexus-classworlds:2.4@jar"
++
++    //sonatype plexus
++    dependency "org.sonatype.plexus:plexus-cipher:1.7@jar"
++    dependency "org.sonatype.plexus:plexus-sec-dispatcher:1.3@jar"
++
++    //core:
++    dependency "org.apache.maven:maven-core:3.0.4@jar"
++    dependency "org.apache.maven:maven-model-builder:3.0.4@jar"
++    dependency "org.apache.maven:maven-model:3.0.4@jar"
++
++    //somewhat core:
++    dependency "org.apache.maven:maven-artifact:3.0.4@jar"
++    dependency "org.apache.maven:maven-compat:3.0.4@jar"
++    dependency "org.apache.maven:maven-repository-metadata:3.0.4@jar"
++    dependency "org.apache.maven:maven-plugin-api:3.0.4@jar"
++    dependency "org.apache.maven:maven-aether-provider:3.0.4@jar"
++
++    dependency 'org.apache.maven.wagon:wagon-http:2.4@jar'
++    dependency 'org.apache.maven.wagon:wagon-provider-api:2.4@jar'
++    dependency 'org.apache.maven.wagon:wagon-http-shared4:2.4@jar'
++
++    //eather:
++    dependency "org.sonatype.aether:aether-api:1.13.1@jar"
++    dependency "org.sonatype.aether:aether-impl:1.13.1@jar"
++    dependency "org.sonatype.aether:aether-spi:1.13.1@jar"
++    dependency "org.sonatype.aether:aether-util:1.13.1@jar"
++    dependency 'org.sonatype.aether:aether-connector-wagon:1.13.1@jar'
++}
++
++libraries.spock = [
++    'org.spockframework:spock-core:0.7-groovy-2.0@jar',
++    libraries.groovy,
++    libraries.objenesis,
++    'cglib:cglib-nodep:2.2.2'
++]
++libraries.jmock = [
++    'org.jmock:jmock:2.5.1',
++    'org.hamcrest:hamcrest-core:1.3',
++    'org.hamcrest:hamcrest-library:1.3',
++    dependencies.create('org.jmock:jmock-junit4:2.5.1') { exclude group: 'junit', module: 'junit-dep' }, //junit-dep pulls old definitions of core junit types.
++    'org.jmock:jmock-legacy:2.5.1',
++    libraries.objenesis,
++    'cglib:cglib-nodep:2.2'
++]
++libraries.gson = "com.google.code.gson:gson:2.2.4"
++libraries.sshd = "org.apache.sshd:sshd-core:0.10.0"
++
++// gradle-1.0 builder: no resolutionStrategy.eachDependency (1.4); the closest is force (same modules only, the
++// other modules of those groups are not replaced) plus an exclude of org.ow2.asm:asm (asm 4.0 of jarjar, replaced by
++// asm-all in the original: checked against the lib/ of the official 2.0 binary)
++allprojects {
++    configurations.all {
++        resolutionStrategy.force libraries.asm, libraries.groovy
++        exclude group: 'org.ow2.asm', module: 'asm'
++    }
++}
+\ No newline at end of file
+diff --git a/gradle/groovyProject.gradle.1.0 b/gradle/groovyProject.gradle.1.0
+new file mode 100644
+index 00000000000..f9f8d227217
+--- /dev/null
++++ b/gradle/groovyProject.gradle.1.0
+@@ -0,0 +1,102 @@
++// gradle/groovyProject.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++import java.util.jar.Attributes
++
++apply plugin: 'groovy'
++
++archivesBaseName = "gradle-${name.replaceAll("\\p{Upper}") { "-${it.toLowerCase()}" } }"
++
++sourceCompatibility = 1.5
++targetCompatibility = 1.5
++
++ext {
++    compileTasks = tasks.matching { it instanceof Compile || it instanceof GroovyCompile /* gradle-1.0: Compile (JavaCompile from 1.1) */ }
++    testTasks = tasks.withType(Test)
++    generatedResourcesDir = file("$buildDir/generated-resources/main")
++    generatedTestResourcesDir = file("$buildDir/generated-resources/test")
++    jarTasks = tasks.withType(Jar)
++}
++
++dependencies {
++    // gradle-1.0 builder: the groovy compiler takes groovy from the groovy configuration (compile classpath from 2.0)
++    groovy libraries.groovy
++    testCompile libraries.junit, libraries.jmock, libraries.spock
++}
++
++// Extracted as it's also used by buildSrc
++apply from: "$rootDir/gradle/compile.gradle.1.0"
++
++task classpathManifest(type: ClasspathManifest)
++
++sourceSets {
++    main.output.dir generatedResourcesDir, builtBy: classpathManifest
++}
++
++if (false) { // bootstrap on Java 7: javaVersion.java6Compatible is true
++    sourceSets.all {
++        java.exclude '**/jdk6/**'
++        groovy.exclude '**/jdk6/**'
++    }
++}
++if (false) { // bootstrap on Java 7: javaVersion.java7 is true
++    sourceSets.all {
++        java.exclude '**/jdk7/**'
++        groovy.exclude '**/jdk7/**'
++    }
++}
++
++// bootstrap: tests are not compiled nor run (see README)
++[compileTestJava, compileTestGroovy, processTestResources, test]*.enabled = false
++
++jarTasks.all { jar ->
++    jar.manifest.mainAttributes(
++            (Attributes.Name.IMPLEMENTATION_TITLE.toString()): 'Gradle',
++            (Attributes.Name.IMPLEMENTATION_VERSION.toString()): version,
++    )
++}
++
++// Configures the project to use the test fixtures from another project, which by default is core.
++// Note this is not used to provide test fixtures, see gradle/testFixtures.gradle for that
++// bootstrap: tests are not compiled nor run (internalTesting and the test fixtures are not built), useTestFixtures
++// does nothing
++ext.useTestFixtures = { params = [:] -> }
++// classycle.gradle (code quality) is not applied for the bootstrap: useClassycle does nothing
++ext.useClassycle = { params = [:] -> }
++
++if (file("src/testFixtures").exists()) {
++    // apply from: "$rootDir/gradle/testFixtures.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++}
++
++if (file("src/integTest").exists()) {
++    // apply from: "$rootDir/gradle/integTest.gradle.1.0"   // tests / ide / code quality / publishing / wrapper: not used for the bootstrap
++}
++
++class ClasspathManifest extends DefaultTask {
++
++    FileCollection input = project.configurations.runtime
++
++    @OutputFile
++    File getManifestFile() {
++        return new File(project.generatedResourcesDir, "${project.archivesBaseName}-classpath.properties")
++    }
++
++    @Input
++    Properties getProperties() {
++        def properties = new Properties()
++        properties.runtime = input.fileCollection {
++            (it instanceof ExternalDependency) || (it instanceof SelfResolvingDependency) /* gradle-1.0: no FileCollectionDependency */
++        }.collect {it.name}.join(',')
++        properties.projects = input.allDependencies.withType(ProjectDependency).collect {it.dependencyProject.archivesBaseName}.join(',')
++        return properties
++    }
++
++    @TaskAction
++    def generate() {
++        manifestFile.withOutputStream { properties.save(it, 'module definition') }
++    }
++}
++ext.ClasspathManifest = ClasspathManifest
++
++// This is here mostly for the TravisCI build.
++// It advertises as an ANSI capable terminal but isn't, so we run with -q there to make
++// the output legible, but we still want test result info
++// pullRequestValidation test logging (CI): not used for the bootstrap
+diff --git a/gradle/providedConfiguration.gradle.1.0 b/gradle/providedConfiguration.gradle.1.0
+new file mode 100644
+index 00000000000..0d073bca381
+--- /dev/null
++++ b/gradle/providedConfiguration.gradle.1.0
+@@ -0,0 +1,21 @@
++// gradle/providedConfiguration.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/**
++ * Adds a configuration named 'provided'. 'Provided' dependencies
++ * are incoming compile dependencies that aren't outgoing
++ * dependencies. In other words, they have no effect on transitive
++ * dependency management.
++ */
++
++configurations {
++    provided
++    providedPlusCompile.extendsFrom(compile, provided)
++    testCompile.extendsFrom(providedPlusCompile)
++}
++
++sourceSets.main {
++    compileClasspath = configurations.providedPlusCompile
++}
++
++plugins.withType(IdeaPlugin) {
++    idea.module.scopes.PROVIDED.plus = [ configurations.provided ]
++}
+diff --git a/gradle/versioning.gradle.1.0 b/gradle/versioning.gradle.1.0
+new file mode 100644
+index 00000000000..8c406355d3c
+--- /dev/null
++++ b/gradle/versioning.gradle.1.0
+@@ -0,0 +1,57 @@
++// gradle/versioning.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++def timestampFormat = new java.text.SimpleDateFormat('yyyyMMddHHmmssZ')
++timestampFormat.timeZone = TimeZone.getTimeZone("UTC")
++
++if (buildTypes.isActive("promotionBuild")) {
++    logger.lifecycle "Invocation tasks: $gradle.startParameter.taskNames\nInvocation properties: $gradle.startParameter.projectProperties"
++}
++
++if (false) { // incomingDistributionsBuildReceipt (incomingDistributions.gradle, cross-version tests) is not used for the bootstrap
++    ext.versionBase = incomingDistributionsBuildReceipt.versionBase
++    ext.buildTimestamp = incomingDistributionsBuildReceipt.buildTimestamp
++} else {
++    ext.versionBase = rootProject.file("version.txt").text.trim()
++
++    if (project.hasProperty("buildTimestamp")) {
++        ext.buildTime = timestampFormat.parse(buildTimestamp)
++    } else {
++        File timestampFile = file("$buildDir/timestamp.txt")
++        if (timestampFile.isFile()) {
++            boolean uptodate = true
++            def modified = timestampFile.lastModified()
++            project(':core').fileTree('src/main').visit {fte ->
++                if (fte.file.isFile() && fte.lastModified > modified) {
++                    uptodate = false
++                    fte.stopVisiting()
++                }
++            }
++            if (!uptodate) {
++                timestampFile.setLastModified(new Date().time)
++            }
++        } else {
++            timestampFile.parentFile.mkdirs()
++            timestampFile.createNewFile()
++        }
++
++        ext.buildTime = new Date(timestampFile.lastModified())
++        ext.buildTimestamp = timestampFormat.format(buildTime)
++    }
++}
++
++ext.rcNumber = project.hasProperty("rcNumber") ? project.rcNumber.toInteger() : null
++ext.finalRelease = project.hasProperty("finalRelease")
++if (rcNumber != null && finalRelease) {
++    throw new InvalidUserDataException("Cannot set rcNumber and finalRelease at the same time")
++}
++
++version = versionBase
++
++ext.isSnapshot = false
++if (finalRelease) {
++    // use version base
++} else if (rcNumber != null) {
++    version += "-rc-$rcNumber"
++} else {
++    isSnapshot = true
++    version += "-$buildTimestamp"
++}
+diff --git a/settings.gradle.1.0 b/settings.gradle.1.0
+new file mode 100644
+index 00000000000..011c43b448b
+--- /dev/null
++++ b/settings.gradle.1.0
+@@ -0,0 +1,75 @@
++// Settings for building Gradle (v2.0.0 sources) with Gradle 1.0, the builder of this step.
++// Same projects as settings.gradle (without docs and test-only projects), every build file is the
++// <name>.1.0 one, in the DSL of Gradle 1.0.
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++include 'distributions'
++include 'baseServices'
++include 'baseServicesGroovy'
++include 'core'
++include 'coreImpl'
++include 'wrapper'
++include 'cli'
++include 'launcher'
++include 'messaging'
++include 'resources'
++include 'resourcesHttp'
++include 'plugins'
++include 'scala'
++include 'ide'
++include 'osgi'
++include 'maven'
++include 'announce'
++include 'jetty'
++include 'codeQuality'
++include 'antlr'
++include 'ui'
++include 'openApi'
++include 'toolingApi'
++// include 'docs': docs/tests only, not built for the bootstrap
++// include 'integTest': docs/tests only, not built for the bootstrap
++include 'sonar'
++include 'signing'
++include 'cpp'
++include 'ear'
++include 'native'
++// include 'internalTesting': docs/tests only, not built for the bootstrap
++// include 'internalIntegTesting': docs/tests only, not built for the bootstrap
++// include 'performance': docs/tests only, not built for the bootstrap
++include 'javascript'
++include 'buildComparison'
++include 'reporting'
++include 'diagnostics'
++include 'publish'
++include 'ivy'
++include 'jacoco'
++include 'buildInit'
++include 'languageBase'
++include 'languageJvm'
++include 'pluginUse'
++
++rootProject.name = 'gradle'
++rootProject.buildFileName = 'build.gradle.1.0'
++rootProject.children.each {project ->
++    String fileBaseName = project.name.replaceAll("\\p{Upper}") { "-${it.toLowerCase()}" }
++    String projectDirName = "subprojects/$fileBaseName"
++    project.projectDir = new File(settingsDir, projectDirName)
++    project.buildFileName = "${fileBaseName}.gradle.1.0"
++    assert project.projectDir.isDirectory()
++    assert project.buildFile.isFile()
++}
++
++// buildSrc: gradle-1.0 builds it before this file is read, buildSrc/settings.gradle selects buildSrc/build.gradle.1.0
+diff --git a/subprojects/announce/announce.gradle.1.0 b/subprojects/announce/announce.gradle.1.0
+new file mode 100644
+index 00000000000..4dd485e68ce
+--- /dev/null
++++ b/subprojects/announce/announce.gradle.1.0
+@@ -0,0 +1,24 @@
++// subprojects/announce/announce.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    compile libraries.groovy
++    compile libraries.slf4j_api
++    compile project(':core')
++    // integTestRuntime project(':plugins')   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
+diff --git a/subprojects/antlr/antlr.gradle.1.0 b/subprojects/antlr/antlr.gradle.1.0
+new file mode 100644
+index 00000000000..00c0e0ed1c6
+--- /dev/null
++++ b/subprojects/antlr/antlr.gradle.1.0
+@@ -0,0 +1,29 @@
++// subprojects/antlr/antlr.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    compile libraries.groovy
++
++    compile project(':core')
++    compile project(':plugins')
++
++    compile libraries.slf4j_api
++    compile libraries.ant
++    compile libraries.ant_antlr
++    compile libraries.antlr
++}
++
++useTestFixtures()
+diff --git a/subprojects/base-services-groovy/base-services-groovy.gradle.1.0 b/subprojects/base-services-groovy/base-services-groovy.gradle.1.0
+new file mode 100644
+index 00000000000..6e0bc7d5a13
+--- /dev/null
++++ b/subprojects/base-services-groovy/base-services-groovy.gradle.1.0
+@@ -0,0 +1,25 @@
++// subprojects/base-services-groovy/base-services-groovy.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2012 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile libraries.groovy
++    compile project(":baseServices")
++}
++
++useTestFixtures()
++useClassycle()
++
+diff --git a/subprojects/base-services/base-services.gradle.1.0 b/subprojects/base-services/base-services.gradle.1.0
+new file mode 100644
+index 00000000000..071b8684e40
+--- /dev/null
++++ b/subprojects/base-services/base-services.gradle.1.0
+@@ -0,0 +1,15 @@
++// subprojects/base-services/base-services.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * A set of generic services and utilities.
++ *
++ * Should have a very small set of dependencies, and should be appropriate to embed in an external
++ * application (eg as part of the tooling API).
++ */
++dependencies {
++    compile libraries.slf4j_api   // publishCompile (publish.gradle, not used for the bootstrap)
++    compile libraries.guava
++    testCompile libraries.groovy
++}
++
++useTestFixtures()
++useClassycle()
+\ No newline at end of file
+diff --git a/subprojects/build-comparison/build-comparison.gradle.1.0 b/subprojects/build-comparison/build-comparison.gradle.1.0
+new file mode 100644
+index 00000000000..5623bdd1fa5
+--- /dev/null
++++ b/subprojects/build-comparison/build-comparison.gradle.1.0
+@@ -0,0 +1,40 @@
++// subprojects/build-comparison/build-comparison.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2011 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile libraries.groovy
++
++    compile project(":resources")
++    compile project(":core")
++    compile project(":toolingApi")
++    compile project(":reporting")
++    compile project(':plugins')
++    compile project(':ear')
++    compile libraries.guava
++    compile libraries.slf4j_api
++
++    testCompile libraries.jsoup
++}
++
++processResources {
++    into "org/gradle/api/plugins/buildcomparison/render/internal/html", {
++        // from { project(":docs").css }   // tests / test-only projects not built for the bootstrap
++        include "base.css"
++    }
++}
++
++useTestFixtures()
+diff --git a/subprojects/build-init/build-init.gradle.1.0 b/subprojects/build-init/build-init.gradle.1.0
+new file mode 100644
+index 00000000000..88b6c824798
+--- /dev/null
++++ b/subprojects/build-init/build-init.gradle.1.0
+@@ -0,0 +1,67 @@
++// subprojects/build-init/build-init.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2013 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    compile libraries.groovy
++    compile project(':core')
++    compile project(':plugins')
++    compile project(':wrapper')
++    // integTestRuntime project(':maven')   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime project(':scala')   // tests / test-only projects not built for the bootstrap
++}
++
++// components { eachComponent { ... } } (component metadata rules, after 1.0): only used to resolve the latest
++// versions below, not used for the bootstrap
++
++task generateTemplateVersionFile(type: GenerateVersionProperties) {
++    outputFile = new File(generatedResourcesDir, "org/gradle/buildinit/tasks/templates/library-versions.properties")
++}
++
++sourceSets.main.resources.srcDir generatedResourcesDir
++processResources.dependsOn generateTemplateVersionFile
++
++// eclipseClasspath / ideaModule: ide not used for the bootstrap
++
++class GenerateVersionProperties extends DefaultTask {
++
++    @OutputFile
++    File outputFile
++
++    @TaskAction
++    void generateFile() {
++        resolveFiles()
++    }
++
++    // bootstrap: REL 2.0 resolves the latest releases at build time (latest.release, not reproducible, api after
++    // gradle-1.0); the versions of the library-versions.properties of the official 2.0 binary are written instead
++    def resolveFiles() {
++        Properties versionProperties = new Properties()
++        versionProperties.putAll([
++                'scala-library': '2.11.1',
++                'scala': '2.11',
++                'scalatest': '2.2.0',
++                'scala-xml': '1.0.2',
++                'groovy': '2.3.3',
++                'junit': '4.11'
++        ])
++        outputFile.parentFile.mkdirs()
++        outputFile.withOutputStream { outputStream ->
++            versionProperties.store(outputStream, "Version values used in build-init templates")
++        }
++    }
++}
++useTestFixtures()
++useClassycle()
+diff --git a/subprojects/cli/cli.gradle.1.0 b/subprojects/cli/cli.gradle.1.0
+new file mode 100644
+index 00000000000..00ba2b32fe0
+--- /dev/null
++++ b/subprojects/cli/cli.gradle.1.0
+@@ -0,0 +1,28 @@
++// subprojects/cli/cli.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2011 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++/*
++    This project contains some utilities for parsing command line arguments.
++
++    It's packaged separately because it's used by multiple “applications” (i.e. gradle core and the wrapper).
++    It has no dependencies, and should never have any.
++*/
++dependencies {
++    testCompile libraries.groovy
++}
++
++useClassycle()
+\ No newline at end of file
+diff --git a/subprojects/code-quality/code-quality.gradle.1.0 b/subprojects/code-quality/code-quality.gradle.1.0
+new file mode 100644
+index 00000000000..3847c8177b0
+--- /dev/null
++++ b/subprojects/code-quality/code-quality.gradle.1.0
+@@ -0,0 +1,38 @@
++// subprojects/code-quality/code-quality.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++apply from: "$rootDir/gradle/providedConfiguration.gradle.1.0"
++
++dependencies {
++    compile libraries.groovy
++
++    compile project(':core')
++    compile project(':plugins')
++    compile project(':reporting')
++
++    compile libraries.slf4j_api
++
++    // minimal dependencies to make our code compile
++    // we don't ship these dependencies because findbugs plugin will download them (and more) at runtime
++    provided "com.google.code.findbugs:findbugs:2.0.1@jar"
++    provided "com.google.code.findbugs:bcel:2.0.1@jar"
++    provided "dom4j:dom4j:1.6.1@jar"
++    provided "jaxen:jaxen:1.1.1@jar"
++}
++
++useTestFixtures()
++
++
+diff --git a/subprojects/core-impl/core-impl.gradle.1.0 b/subprojects/core-impl/core-impl.gradle.1.0
+new file mode 100644
+index 00000000000..1dc6bd8f8ef
+--- /dev/null
++++ b/subprojects/core-impl/core-impl.gradle.1.0
+@@ -0,0 +1,82 @@
++// subprojects/core-impl/core-impl.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++apply plugin: "groovy"
++
++import org.gradle.build.*
++
++configurations {
++    mvn3Input
++}
++
++dependencies {
++    compile project(":core")
++    compile project(":resourcesHttp")
++
++    compile libraries.commons_lang
++    compile libraries.commons_io
++    compile libraries.ivy
++    compile libraries.slf4j_api
++    compile libraries.maven_ant_tasks
++    compile libraries.jsch
++    compile libraries.gson
++    runtime libraries.xbean //maven3 classes dependency
++    runtime "org.bouncycastle:bcprov-jdk15:1.46@jar"
++
++    compile fileTree("$buildDir/libs/jarjar") {
++        builtBy 'jarJarMaven3'
++    }
++
++    mvn3Input libraries.maven3
++
++    testCompile libraries.groovy
++
++    //this dependency is necessary to run IvySFtpResolverIntegrationTest on ibm jdk
++    //integTestRuntime "org.bouncycastle:bcprov-jdk15:1.46@jar"
++
++    // testFixturesCompile project(":internalIntegTesting")   // tests / test-only projects not built for the bootstrap
++}
++
++task jarJarMaven3(type: JarJar) {
++    inputJars = configurations.mvn3Input
++    outputDir = file("$buildDir/libs/jarjar")
++
++    //unfortunately, all those need to be jarjarred.
++    // Even if some library (like aether) is not included in maven-ant-tasks it has
++    // META-INF/plexus/components.xml that to jarjarred components.
++    rule('org.apache.maven.**', 'org.gradle.mvn3.org.apache.maven.@1')
++    rule('org.codehaus.**', 'org.gradle.mvn3.org.codehaus.@1')
++    rule('org.sonatype.**', 'org.gradle.mvn3.org.sonatype.@1')
++
++    avoidConflictingPlexusComponents(it)
++}
++
++if(isWindows && javaVersion.java5){
++    compileTestGroovy.options.fork (memoryMaximumSize: '512m')
++}
++
++classpathManifest.dependsOn jarJarMaven3 //see GRADLE-2521
++
++//adding explicit task dependencies due to http://issues.gradle.org/browse/GRADLE-2481
++def allJarJars = tasks.withType(JarJar)
++// ideaModule.dependsOn allJarJars   // ide: not used for the bootstrap
++// eclipseClasspath.dependsOn allJarJars   // ide: not used for the bootstrap
++useTestFixtures()
++useTestFixtures(project: ":messaging")
++
++def avoidConflictingPlexusComponents(JarJar task) {
++    //DefaultSecDispatcher component is configured in 2 different jars (META-INF/plexus/components.xml).
++    //The implementation is the same but the 'hint' is different and this makes plexus fail to start.
++    //I'm removing the components.xml file from the sec-dispatcher jar.
++    //This file contains only single component so I think we can remove it.
++    task.doLast {
++        def plexusSec = "$outputDir/jarjar-plexus-sec-dispatcher-1.3.jar"
++        def plexusSecNoComps = "$plexusSec-noComps"
++        ant {
++            zip(destfile: plexusSecNoComps, update: true) {
++                zipfileset(src: plexusSec) {
++                    exclude(name: 'META-INF/plexus/components.xml')
++                }
++            }
++            move(file: plexusSecNoComps, tofile: plexusSec)
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/subprojects/core/core.gradle.1.0 b/subprojects/core/core.gradle.1.0
+new file mode 100644
+index 00000000000..ba974d634a8
+--- /dev/null
++++ b/subprojects/core/core.gradle.1.0
+@@ -0,0 +1,144 @@
++// subprojects/core/core.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++configurations {
++    reports
++}
++
++dependencies {
++    compile libraries.groovy
++
++    compile libraries.slf4j_api   // publishCompile (publish.gradle, not used for the bootstrap)
++    compile project(":baseServices")   // publishCompile (publish.gradle, not used for the bootstrap)
++    compile project(":messaging")   // publishCompile (publish.gradle, not used for the bootstrap)
++    compile project(":resources")   // publishCompile (publish.gradle, not used for the bootstrap)
++
++    compile project(":baseServicesGroovy")
++    compile libraries.asm
++    compile libraries.ant
++    compile libraries.commons_collections
++    compile libraries.commons_io
++    compile libraries.commons_lang
++    compile libraries.logback_core
++    compile libraries.logback_classic
++    compile libraries.guava
++    compile libraries.jcip
++    compile libraries.jul_to_slf4j
++    compile module('com.googlecode.jarjar:jarjar:1.3')
++    compile libraries.inject
++
++    compile project(":cli")
++    compile project(":native")
++
++    // runtime project(":docs")   // tests / test-only projects not built for the bootstrap
++
++    runtime libraries.log4j_to_slf4j
++    runtime libraries.jcl_to_slf4j
++
++    testCompile libraries.log4j_to_slf4j
++    testCompile libraries.jcl_to_slf4j
++    testCompile libraries.jsoup
++
++    testRuntime libraries.xerces
++    testRuntime project(":diagnostics")
++
++    // testFixturesCompile project(":internalTesting")   // tests / test-only projects not built for the bootstrap
++    // testFixturesCompile libraries.ivy   // tests / test-only projects not built for the bootstrap
++
++    // testFixturesRuntime project(':coreImpl')   // tests / test-only projects not built for the bootstrap
++    // testFixturesRuntime project(':pluginUse')   // tests / test-only projects not built for the bootstrap
++
++    // integTestCompile project(":internalIntegTesting")   // tests / test-only projects not built for the bootstrap
++
++    reports 'css3-pie:css3-pie:1.0beta3'
++}
++
++useTestFixtures()
++useTestFixtures(project: ":messaging")
++
++[compileGroovy, compileTestGroovy]*.groovyOptions*.fork(memoryInitialSize: '128M', memoryMaximumSize: '1G')
++
++task buildReceiptResource(type: Copy, dependsOn: rootProject.createBuildReceipt) {
++    into "$generatedResourcesDir/org/gradle"
++    from rootProject.createBuildReceipt.receiptFile
++}
++
++sourceSets.main.output.dir generatedResourcesDir, builtBy: buildReceiptResource
++
++task reportResources(type: Copy) {
++    from configurations.reports
++    into "$generatedResourcesDir/org/gradle/reporting"
++}
++sourceSets.main.output.dir generatedResourcesDir, builtBy: reportResources
++
++task pluginsManifest(type: PluginsManifest)
++sourceSets.main.output.dir generatedResourcesDir, builtBy: pluginsManifest
++
++class PluginsManifest extends DefaultTask {
++    @OutputFile
++    File getPropertiesFile() {
++        return new File(project.generatedResourcesDir, "gradle-plugins.properties")
++    }
++
++    @Input
++    Properties getPluginProperties() {
++        def properties = new Properties()
++        properties.plugins = project.pluginProjects.collect { it.archivesBaseName }.join(',')
++        return properties
++    }
++
++    @TaskAction
++    def generate() {
++        propertiesFile.withOutputStream { pluginProperties.save(it, 'plugin definitions') }
++    }
++}
++
++// default-imports.txt: in 2.0 generated by the docs project (defaultImports, from the DSL meta-data of groovydocAll),
++// not built for the bootstrap. Same result from the sources: the packages of the public API classes
++// (javadocAll includes/excludes, public projects), with the excludes/extras of the docs defaultImports task.
++task defaultImports {
++    ext.destFile = new File(generatedResourcesDir, "default-imports.txt")
++    def srcDirs = rootProject.file('subprojects').listFiles().findAll {
++        !it.name.startsWith('internal') && !(it.name in ['integ-test', 'distributions', 'docs', 'performance'])
++    }.collectMany { [new File(it, 'src/main/java'), new File(it, 'src/main/groovy')] }.findAll { it.directory }
++    inputs.files srcDirs
++    outputs.file destFile
++    doLast {
++        def includes = ['org/gradle/api/**', 'org/gradle/*', 'org/gradle/external/javadoc/**', 'org/gradle/language/**',
++            'org/gradle/ide/**', 'org/gradle/nativebinaries/**', 'org/gradle/process/**', 'org/gradle/plugins/**',
++            'org/gradle/runtime/**', 'org/gradle/testfixtures/**', 'org/gradle/tooling/**', 'org/gradle/testing/jacoco/**',
++            'org/gradle/buildinit/**']
++        def excludedPrefixes = ['org.gradle.tooling.', 'org.gradle.testfixtures.']
++        def excludedPackages = ['org.gradle.tooling', 'org.gradle.testfixtures', 'org.gradle.plugins.ide.eclipse.model',
++            'org.gradle.plugins.ide.idea.model', 'org.gradle.api.tasks.testing.logging', 'org.gradle.plugins.binaries.model',
++            'org.gradle.ide.cdt.model']
++        def packages = new TreeSet(['org.gradle.util'])
++        srcDirs.each { dir ->
++            project.fileTree(dir: dir, includes: includes, excludes: ['**/internal/**', '**/package-info.java']).visit { f ->
++                if (!f.directory && (f.name.endsWith('.java') || f.name.endsWith('.groovy'))) {
++                    def pkg = f.relativePath.parent.segments.join('.')
++                    if (!(pkg in excludedPackages) && !excludedPrefixes.any { pkg.startsWith(it) }) {
++                        packages << pkg
++                    }
++                }
++            }
++        }
++        destFile.parentFile.mkdirs()
++        destFile.text = packages.collect { "import ${it}.*\n" }.join('')
++    }
++}
++sourceSets.main.output.dir generatedResourcesDir, builtBy: defaultImports
+diff --git a/subprojects/core/src/main/groovy/org/gradle/api/artifacts/ArtifactRepositoryContainer.java b/subprojects/core/src/main/groovy/org/gradle/api/artifacts/ArtifactRepositoryContainer.java
+index a4e994bb88b..d35b2c3809c 100644
+--- a/subprojects/core/src/main/groovy/org/gradle/api/artifacts/ArtifactRepositoryContainer.java
++++ b/subprojects/core/src/main/groovy/org/gradle/api/artifacts/ArtifactRepositoryContainer.java
+@@ -47,7 +47,7 @@
+ public interface ArtifactRepositoryContainer extends NamedDomainObjectList<ArtifactRepository>, Configurable<ArtifactRepositoryContainer> {
+     String DEFAULT_MAVEN_CENTRAL_REPO_NAME = "MavenRepo";
+     String DEFAULT_MAVEN_LOCAL_REPO_NAME = "MavenLocal";
+-    String MAVEN_CENTRAL_URL = "http://repo1.maven.org/maven2/";
++    String MAVEN_CENTRAL_URL = "https://repo1.maven.org/maven2";
+ 
+     /**
+      * Adds a repository to this container, at the end of the repository sequence.
+diff --git a/subprojects/cpp/cpp.gradle.1.0 b/subprojects/cpp/cpp.gradle.1.0
+new file mode 100644
+index 00000000000..6109316e67e
+--- /dev/null
++++ b/subprojects/cpp/cpp.gradle.1.0
+@@ -0,0 +1,31 @@
++// subprojects/cpp/cpp.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2011 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile libraries.groovy
++    compile project(':core')
++    compile project(":plugins")
++    compile project(":ide")
++    compile libraries.commons_io
++    // integTestRuntime project(":maven")   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
++useTestFixtures(project: ":messaging")
++useTestFixtures(sourceSet: "testFixtures")
++
++//useClassycle()
+diff --git a/subprojects/diagnostics/diagnostics.gradle.1.0 b/subprojects/diagnostics/diagnostics.gradle.1.0
+new file mode 100644
+index 00000000000..7bcec6d2220
+--- /dev/null
++++ b/subprojects/diagnostics/diagnostics.gradle.1.0
+@@ -0,0 +1,27 @@
++// subprojects/diagnostics/diagnostics.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2012 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile libraries.groovy
++    compile project(':core')
++    compile project(':reporting')
++    compile project(':plugins')
++    compile project(':coreImpl')
++}
++
++useTestFixtures()
++useTestFixtures(project: ':coreImpl')
+\ No newline at end of file
+diff --git a/subprojects/distributions/distributions.gradle.1.0 b/subprojects/distributions/distributions.gradle.1.0
+new file mode 100644
+index 00000000000..2edd240fc70
+--- /dev/null
++++ b/subprojects/distributions/distributions.gradle.1.0
+@@ -0,0 +1,91 @@
++// subprojects/distributions/distributions.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2012 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++// This is a groovy project because we have int tests.
++// Remove any pre-configured archives
++configurations.all {
++    artifacts.clear()
++}
++tasks.remove(jar)
++
++tasks.withType(AbstractArchiveTask) {
++    baseName "gradle"
++
++    // The CI server looks for the distributions at this location
++    destinationDir = rootProject.distsDir
++    clean.delete archivePath
++}
++
++dependencies {
++    testCompile libraries.groovy
++}
++
++configurations {
++    dists
++}
++
++// daemonIntegTest.enabled = false   // tests / test-only projects not built for the bootstrap
++
++// evaluationDependsOn ":docs": docs are not built for the bootstrap
++
++ext {
++    zipRootFolder = "gradle-$version"
++
++    binDistImage = copySpec {
++        from('src/toplevel') {
++            exclude 'media/**'
++            expand(version: version)
++        }
++        from('src/toplevel') {
++            include 'media/**'
++        }
++        // from project(':docs').outputs.distDocs   // tests / test-only projects not built for the bootstrap
++        into('bin') {
++            from { project(':launcher').startScripts.outputs.files }
++            fileMode = 0755
++        }
++        into('lib') {
++            from rootProject.configurations.runtime
++            into('plugins') {
++                from rootProject.configurations.gradlePlugins - rootProject.configurations.runtime
++            }
++        }
++    }
++
++    // allDistImage (sources, docs, samples) and allZip: not used for the bootstrap
++}
++
++task binZip(type: Zip) {
++    classifier = 'bin'
++    into(zipRootFolder) {
++        with binDistImage
++    }
++}
++
++// srcZip, outputsZip, artifacts (dists): not used for the bootstrap
++
++// bootstrap: the distribution image (binDistImage) into build/distributions/exploded of the root project
++task explodedDist(type: Sync, dependsOn: [':launcher:startScripts', rootProject.configurations.runtime, rootProject.configurations.gradlePlugins]) {
++    into "$rootProject.buildDir/distributions/exploded"
++    with binDistImage
++    doLast { ant.chmod(dir: "$rootProject.buildDir/distributions/exploded/bin", perm: 'ugo+rx', includes: '**/*') }
++}
++
++// tests / ide: not used for the bootstrap (gradle-1.0 builder):
++// integTest {
++//     inputs.files allZip, binZip, srcZip
++// }
+\ No newline at end of file
+diff --git a/subprojects/ear/ear.gradle.1.0 b/subprojects/ear/ear.gradle.1.0
+new file mode 100644
+index 00000000000..6cbb919d289
+--- /dev/null
++++ b/subprojects/ear/ear.gradle.1.0
+@@ -0,0 +1,24 @@
++// subprojects/ear/ear.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2011 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile project(':core')
++    compile project(":plugins")
++    compile libraries.inject
++}
++
++useTestFixtures()
+diff --git a/subprojects/ide/ide.gradle.1.0 b/subprojects/ide/ide.gradle.1.0
+new file mode 100644
+index 00000000000..58e02d15ddb
+--- /dev/null
++++ b/subprojects/ide/ide.gradle.1.0
+@@ -0,0 +1,37 @@
++// subprojects/ide/ide.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++sourceSets.main.java.srcDirs = []
++sourceSets.main.groovy.srcDirs = ['src/main/java', 'src/main/groovy']
++
++dependencies {
++    compile libraries.groovy
++
++    compile project(':scala')
++    compile project(':core')
++    compile project(':launcher')
++    compile project(':plugins')
++    compile project(':ear')
++    compile project(':toolingApi')
++    compile libraries.slf4j_api
++    compile libraries.inject
++
++    testCompile libraries.xmlunit
++    testCompile project(':coreImpl')
++}
++
++useTestFixtures()
+diff --git a/subprojects/ivy/ivy.gradle.1.0 b/subprojects/ivy/ivy.gradle.1.0
+new file mode 100644
+index 00000000000..e8a73b98c5b
+--- /dev/null
++++ b/subprojects/ivy/ivy.gradle.1.0
+@@ -0,0 +1,31 @@
++// subprojects/ivy/ivy.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2012 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++
++
++dependencies {
++    compile project(':core')
++    compile project(':publish')
++    compile project(':plugins') // for base plugin to get archives conf
++    compile project(':coreImpl')
++
++    testCompile libraries.groovy
++    // integTestCompile project(":ear")   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
++useClassycle()
+\ No newline at end of file
+diff --git a/subprojects/jacoco/jacoco.gradle.1.0 b/subprojects/jacoco/jacoco.gradle.1.0
+new file mode 100644
+index 00000000000..8acf776b9ac
+--- /dev/null
++++ b/subprojects/jacoco/jacoco.gradle.1.0
+@@ -0,0 +1,28 @@
++// subprojects/jacoco/jacoco.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2013 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++
++
++dependencies {
++	compile libraries.groovy
++	compile project(':core')
++	compile project(':plugins')
++	compile project(':reporting')
++    testCompile libraries.jsoup
++}
++
++useTestFixtures()
+\ No newline at end of file
+diff --git a/subprojects/javascript/javascript.gradle.1.0 b/subprojects/javascript/javascript.gradle.1.0
+new file mode 100644
+index 00000000000..0556ebf4c6d
+--- /dev/null
++++ b/subprojects/javascript/javascript.gradle.1.0
+@@ -0,0 +1,31 @@
++// subprojects/javascript/javascript.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2012 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile libraries.groovy
++
++    compile "org.mozilla:rhino:1.7R3"
++    compile libraries.gson // used by JsHint
++    compile "org.simpleframework:simple:4.1.21" // used by http package in envjs
++    compile project(':core'), project(":plugins")
++    compile libraries.inject
++
++    // Required by JavaScriptExtension#getGoogleApisRepository()
++    compile project(':coreImpl')
++}
++
++useTestFixtures()
+diff --git a/subprojects/jetty/jetty.gradle.1.0 b/subprojects/jetty/jetty.gradle.1.0
+new file mode 100644
+index 00000000000..09e46fb0b47
+--- /dev/null
++++ b/subprojects/jetty/jetty.gradle.1.0
+@@ -0,0 +1,45 @@
++// subprojects/jetty/jetty.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2009 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    compile libraries.groovy
++
++    compile project(':core')
++    compile project(':plugins')
++
++    compile libraries.slf4j_api
++    compile libraries.jetty
++    compile libraries.jetty_util
++    compile libraries.servlet_api
++    compile module("org.mortbay.jetty:jetty-plus:6.1.25") {
++        dependency libraries.jetty
++        module("org.mortbay.jetty:jetty-naming:6.1.25") {
++            dependency libraries.jetty
++        }
++    }
++
++    runtime module("org.mortbay.jetty:jsp-2.1:6.1.14") {
++        dependency "org.eclipse.jdt:core:3.1.1@jar"
++        dependency "org.mortbay.jetty:jsp-api-2.1:6.1.14@jar"
++        dependency libraries.jetty_util
++        dependency libraries.servlet_api
++    }
++
++    runtime "org.mortbay.jetty:jetty-annotations:6.1.25@jar"
++    runtime "org.apache.geronimo.specs:geronimo-annotation_1.0_spec:1.0@jar"
++}
++
++useTestFixtures()
+\ No newline at end of file
+diff --git a/subprojects/language-base/language-base.gradle.1.0 b/subprojects/language-base/language-base.gradle.1.0
+new file mode 100644
+index 00000000000..d5861cf4a15
+--- /dev/null
++++ b/subprojects/language-base/language-base.gradle.1.0
+@@ -0,0 +1,8 @@
++// subprojects/language-base/language-base.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++dependencies {
++    compile libraries.groovy
++    compile project(":core")
++}
++
++useClassycle()
++useTestFixtures()
+diff --git a/subprojects/language-jvm/language-jvm.gradle.1.0 b/subprojects/language-jvm/language-jvm.gradle.1.0
+new file mode 100644
+index 00000000000..2a830af98cb
+--- /dev/null
++++ b/subprojects/language-jvm/language-jvm.gradle.1.0
+@@ -0,0 +1,9 @@
++// subprojects/language-jvm/language-jvm.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++dependencies {
++    compile libraries.groovy
++    compile project(":languageBase")
++    compile project(":core")
++}
++
++useClassycle()
++useTestFixtures()
+diff --git a/subprojects/launcher/launcher.gradle.1.0 b/subprojects/launcher/launcher.gradle.1.0
+new file mode 100644
+index 00000000000..85a6624e5a2
+--- /dev/null
++++ b/subprojects/launcher/launcher.gradle.1.0
+@@ -0,0 +1,79 @@
++// subprojects/launcher/launcher.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++configurations {
++    startScriptGenerator
++}
++
++dependencies {
++    compile project(':baseServices')
++    compile project(':core')
++    compile project(':cli')
++    compile project(':ui')
++    compile project(':toolingApi')
++    compile project(':native')
++
++    compile libraries.slf4j_api
++
++    testCompile libraries.groovy
++
++    startScriptGenerator project(':plugins')
++}
++
++useTestFixtures()
++
++jar {
++    manifest.mainAttributes('Main-Class': "org.gradle.launcher.GradleMain")
++    doFirst {
++        jar.manifest.mainAttributes('Class-Path': "${project(':core').jar.archivePath.name} ${project(':baseServices').jar.archivePath.name}")
++    }
++}
++
++task startScripts(type: StartScriptGenerator) {
++    startScriptsDir = new File("$buildDir/startScripts")
++    classpath = configurations.startScriptGenerator
++    launcherJar = jar.outputs.files
++}
++
++class StartScriptGenerator extends DefaultTask {
++    File startScriptsDir
++
++    @InputFiles
++    FileCollection classpath
++
++    @InputFiles
++    FileCollection launcherJar
++
++    @OutputFile
++    File getShellScript() {
++        return new File(startScriptsDir, "gradle")
++    }
++
++    @OutputFile
++    File getBatchFile() {
++        return new File(startScriptsDir, "gradle.bat")
++    }
++
++    @TaskAction
++    def generate() {
++        logging.captureStandardOutput(LogLevel.INFO)
++        def generator = new org.gradle.api.internal.plugins.StartScriptGenerator()
++        generator.applicationName = 'Gradle'
++        generator.optsEnvironmentVar = 'GRADLE_OPTS'
++        generator.exitEnvironmentVar = 'GRADLE_EXIT_CONSOLE'
++        generator.mainClassName = 'org.gradle.launcher.GradleMain'
++        generator.scriptRelPath = 'bin/gradle'
++        generator.classpath = ["lib/${launcherJar.singleFile.name}" as String]
++        generator.appNameSystemProperty = 'org.gradle.appname'
++        generator.generateUnixScript(shellScript)
++        generator.generateWindowsScript(batchFile)
++    }
++}
++
++// tests / ide: not used for the bootstrap (gradle-1.0 builder):
++// daemonIntegTest {
++//     //those tests are always using the daemon, they use exclusive daemons and they are a part of a regular check-in build anyway.
++//     //since they are using exclusive daemons they don't contribute to the daemonIntegTest stress/load test.
++//     //excluding to avoid unnecessary re-running and stealing resources.
++//     exclude "org/gradle/launcher/daemon/**/*"
++// }
++
++useClassycle()
+\ No newline at end of file
+diff --git a/subprojects/maven/maven.gradle.1.0 b/subprojects/maven/maven.gradle.1.0
+new file mode 100644
+index 00000000000..735a14dff92
+--- /dev/null
++++ b/subprojects/maven/maven.gradle.1.0
+@@ -0,0 +1,37 @@
++// subprojects/maven/maven.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile libraries.groovy
++
++    compile project(':core')
++    compile project(':coreImpl')
++    compile project(':plugins')
++    compile project(':publish')
++    compile libraries.slf4j_api
++
++    compile libraries.maven_ant_tasks
++    compile "org.sonatype.pmaven:pmaven-common:0.8-20100325@jar"
++    compile "org.sonatype.pmaven:pmaven-groovy:0.8-20100325@jar"
++    compile "org.codehaus.plexus:plexus-component-annotations:1.5.2@jar"
++
++    testCompile libraries.xmlunit
++
++    // integTestCompile project(":ear")   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
+diff --git a/subprojects/messaging/messaging.gradle.1.0 b/subprojects/messaging/messaging.gradle.1.0
+new file mode 100644
+index 00000000000..b370a642739
+--- /dev/null
++++ b/subprojects/messaging/messaging.gradle.1.0
+@@ -0,0 +1,10 @@
++// subprojects/messaging/messaging.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++dependencies {
++    compile project(':baseServices')   // publishCompile (publish.gradle, not used for the bootstrap)
++    compile libraries.slf4j_api   // publishCompile (publish.gradle, not used for the bootstrap)
++    compile libraries.guava   // publishCompile (publish.gradle, not used for the bootstrap)
++    compile 'com.esotericsoftware.kryo:kryo:2.20'   // publishCompile (publish.gradle, not used for the bootstrap)
++    testCompile libraries.groovy
++}
++
++useTestFixtures()
+diff --git a/subprojects/native/native.gradle.1.0 b/subprojects/native/native.gradle.1.0
+new file mode 100644
+index 00000000000..3a6c6c82c83
+--- /dev/null
++++ b/subprojects/native/native.gradle.1.0
+@@ -0,0 +1,21 @@
++// subprojects/native/native.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++    This project contains various native operating system integration utilities.
++*/
++dependencies {
++    compile project(':baseServices')
++    compile libraries.commons_io
++    compile libraries.slf4j_api
++    compile libraries.jna
++    compile libraries.nativePlatform
++    compile module('org.fusesource.jansi:jansi:1.2.1') {
++        dependency libraries.jna
++    }
++    compile libraries.guava
++    compile libraries.jcip
++    testCompile libraries.groovy
++}
++
++useTestFixtures()
++useClassycle()
++
+diff --git a/subprojects/open-api/open-api.gradle.1.0 b/subprojects/open-api/open-api.gradle.1.0
+new file mode 100644
+index 00000000000..b0febe2b7d2
+--- /dev/null
++++ b/subprojects/open-api/open-api.gradle.1.0
+@@ -0,0 +1,8 @@
++// subprojects/open-api/open-api.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++dependencies {
++    // integTestCompile libraries.groovy   // tests / test-only projects not built for the bootstrap
++    // integTestCompile libraries.slf4j_api   // tests / test-only projects not built for the bootstrap
++    // integTestCompile libraries.commons_lang   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
+diff --git a/subprojects/osgi/osgi.gradle.1.0 b/subprojects/osgi/osgi.gradle.1.0
+new file mode 100644
+index 00000000000..a1736b494a8
+--- /dev/null
++++ b/subprojects/osgi/osgi.gradle.1.0
+@@ -0,0 +1,28 @@
++// subprojects/osgi/osgi.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile libraries.groovy
++
++    compile project(':core')
++    compile project(':plugins')
++    compile libraries.slf4j_api
++
++    compile module('biz.aQute.bnd:bndlib:2.1.0')
++}
++
++useTestFixtures()
+diff --git a/subprojects/plugin-use/plugin-use.gradle.1.0 b/subprojects/plugin-use/plugin-use.gradle.1.0
+new file mode 100644
+index 00000000000..2d0bd4768d2
+--- /dev/null
++++ b/subprojects/plugin-use/plugin-use.gradle.1.0
+@@ -0,0 +1,27 @@
++// subprojects/plugin-use/plugin-use.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2014 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile project(":core")
++    compile project(":coreImpl")
++    compile project(":resourcesHttp")
++
++    // testFixturesCompile project(":internalIntegTesting")   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
++useClassycle()
+\ No newline at end of file
+diff --git a/subprojects/plugins/plugins.gradle.1.0 b/subprojects/plugins/plugins.gradle.1.0
+new file mode 100644
+index 00000000000..6b0c0cacd85
+--- /dev/null
++++ b/subprojects/plugins/plugins.gradle.1.0
+@@ -0,0 +1,62 @@
++// subprojects/plugins/plugins.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++apply from: "$rootDir/gradle/providedConfiguration.gradle.1.0"
++
++configurations {
++    // testFixtures   // tests / test-only projects not built for the bootstrap
++}
++
++dependencies {
++    compile libraries.groovy
++
++    compile project(':core')
++    compile project(':coreImpl')
++    compile project(':reporting')
++    compile project(':languageBase')
++    compile project(':languageJvm')
++
++    compile libraries.ant
++    compile libraries.asm
++    compile libraries.commons_io
++    compile libraries.commons_lang
++    compile libraries.junit
++    compile libraries.slf4j_api
++    compile 'org.testng:testng:6.3.1'
++
++    runtime libraries.commons_cli
++
++    testCompile "com.google.inject:guice:2.0@jar"
++    testCompile libraries.jsoup
++}
++
++evaluationDependsOn(":wrapper")
++task wrapperJar(type: Copy) {
++    from project(":wrapper").executableJar.outputs.files
++    into generatedResourcesDir
++}
++sourceSets.main.output.dir generatedResourcesDir, builtBy: wrapperJar
++
++// tests / ide: not used for the bootstrap (gradle-1.0 builder):
++// test {
++//     exclude 'org/gradle/api/internal/tasks/testing/junit/ATestClass*.*'
++//     exclude 'org/gradle/api/internal/tasks/testing/junit/ABroken*TestClass*.*'
++// }
++
++useTestFixtures()
++useTestFixtures(sourceSet: "testFixtures")
++useTestFixtures(project: ":coreImpl")
+\ No newline at end of file
+diff --git a/subprojects/publish/publish.gradle.1.0 b/subprojects/publish/publish.gradle.1.0
+new file mode 100644
+index 00000000000..447b4f3de3c
+--- /dev/null
++++ b/subprojects/publish/publish.gradle.1.0
+@@ -0,0 +1,29 @@
++// subprojects/publish/publish.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2012 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile project(':core')
++    compile project(':coreImpl')
++
++    testCompile libraries.groovy
++
++    // integTestRuntime project(":ivy")   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime project(":maven")   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
++useClassycle()
+\ No newline at end of file
+diff --git a/subprojects/reporting/reporting.gradle.1.0 b/subprojects/reporting/reporting.gradle.1.0
+new file mode 100644
+index 00000000000..15d59800b89
+--- /dev/null
++++ b/subprojects/reporting/reporting.gradle.1.0
+@@ -0,0 +1,12 @@
++// subprojects/reporting/reporting.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++dependencies {
++    compile libraries.groovy
++    compile project(':core')
++    compile 'com.googlecode.jatl:jatl:0.2.2'
++
++    testCompile libraries.jsoup
++    // integTestRuntime project(':codeQuality')   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime project(':jacoco')   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
+\ No newline at end of file
+diff --git a/subprojects/resources-http/resources-http.gradle.1.0 b/subprojects/resources-http/resources-http.gradle.1.0
+new file mode 100644
+index 00000000000..6ca2fe1b8c9
+--- /dev/null
++++ b/subprojects/resources-http/resources-http.gradle.1.0
+@@ -0,0 +1,29 @@
++// subprojects/resources-http/resources-http.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2014 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile project(':resources')
++    compile project(':baseServices')
++    compile libraries.commons_httpclient
++    compile libraries.commons_lang
++    compile libraries.nekohtml
++
++    testCompile libraries.groovy
++}
++
++useTestFixtures()
++useClassycle()
+diff --git a/subprojects/resources/resources.gradle.1.0 b/subprojects/resources/resources.gradle.1.0
+new file mode 100644
+index 00000000000..a917ae4bab4
+--- /dev/null
++++ b/subprojects/resources/resources.gradle.1.0
+@@ -0,0 +1,16 @@
++// subprojects/resources/resources.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * A set of general-purpose resource abstractions.
++ */
++apply plugin: "groovy"
++
++dependencies {
++    compile libraries.slf4j_api
++    compile project(':baseServices')
++    compile project(':messaging')
++    compile libraries.commons_io
++    testCompile libraries.groovy
++}
++
++useTestFixtures()
++useClassycle()
+diff --git a/subprojects/scala/scala.gradle.1.0 b/subprojects/scala/scala.gradle.1.0
+new file mode 100644
+index 00000000000..91abceb3363
+--- /dev/null
++++ b/subprojects/scala/scala.gradle.1.0
+@@ -0,0 +1,40 @@
++// subprojects/scala/scala.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++apply from: "$rootDir/gradle/providedConfiguration.gradle.1.0"
++
++dependencies {
++    compile libraries.groovy
++
++    compile project(":core")
++    compile project(":languageJvm")
++    compile project(":plugins")
++
++    // keep in sync with ScalaBasePlugin code
++    provided("com.typesafe.zinc:zinc:0.3.0")
++
++    testCompile libraries.slf4j_api
++
++    // integTestRuntime project(":ide")   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures(project: ":plugins") // includes core test fixtures
++
++// tests / ide: not used for the bootstrap (gradle-1.0 builder):
++// configure([integTest, daemonIntegTest]) {
++//     jvmArgs "-XX:MaxPermSize=1500m" // AntInProcessScalaCompilerIntegrationTest needs lots of permgen
++// }
+diff --git a/subprojects/signing/signing.gradle.1.0 b/subprojects/signing/signing.gradle.1.0
+new file mode 100644
+index 00000000000..4823934e2c5
+--- /dev/null
++++ b/subprojects/signing/signing.gradle.1.0
+@@ -0,0 +1,30 @@
++// subprojects/signing/signing.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2011 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile libraries.groovy
++
++    compile project(':core')
++    compile project(":plugins")
++    compile project(":maven")
++
++    compile module("org.bouncycastle:bcpg-jdk15:1.46") {
++        dependency "org.bouncycastle:bcprov-jdk15:1.46@jar"
++    }
++}
++
++useTestFixtures()
+\ No newline at end of file
+diff --git a/subprojects/sonar/sonar.gradle.1.0 b/subprojects/sonar/sonar.gradle.1.0
+new file mode 100644
+index 00000000000..bb503d8fb80
+--- /dev/null
++++ b/subprojects/sonar/sonar.gradle.1.0
+@@ -0,0 +1,47 @@
++// subprojects/sonar/sonar.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2011 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++apply from: "$rootDir/gradle/providedConfiguration.gradle.1.0"
++
++dependencies {
++    compile project(":core")
++    compile project(":plugins")
++    compile project(":jacoco")
++    compile libraries.groovy
++
++    // Sonar Runner plugin
++    compile "org.codehaus.sonar-plugins:sonar-runner:2.0"
++    // version number is part of module name, to allow for multiple versions on same class path
++    // integTestRuntime "org.gradle.sonar:sonar-server-3.2:3.2@war"   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime "org.gradle.sonar:sonar-test-server-home-dir-3.2:3.2@zip"   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime "org.gradle.sonar:sonar-test-server:3.4@war"   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime "org.gradle.sonar:sonar-test-server-home-dir:3.4.0.1@zip"   // tests / test-only projects not built for the bootstrap
++
++    // Sonar plugin
++    compile libraries.guava
++    compile libraries.slf4j_api
++    compile libraries.inject
++    compile "org.codehaus.sonar:sonar-batch-bootstrapper:2.9@jar"
++    // minimal dependencies to make our code compile
++    // we don't ship these dependencies because sonar-batch-bootstrapper will download them (and many more) at runtime
++    provided "org.codehaus.sonar:sonar-batch:2.9@jar"
++    provided "org.codehaus.sonar:sonar-plugin-api:2.9@jar"
++    provided "commons-configuration:commons-configuration:1.6@jar"
++}
++
++useTestFixtures()
++useClassycle()
+diff --git a/subprojects/tooling-api/tooling-api.gradle.1.0 b/subprojects/tooling-api/tooling-api.gradle.1.0
+new file mode 100644
+index 00000000000..a0cff306750
+--- /dev/null
++++ b/subprojects/tooling-api/tooling-api.gradle.1.0
+@@ -0,0 +1,46 @@
++// subprojects/tooling-api/tooling-api.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++import org.gradle.build.*
++// import ...ArchivePublishArtifact: publishing (left out below)
++
++dependencies {
++    compile project(':core') // configuration publishCompileWithProjectJar (publish.gradle, not used for the bootstrap)
++    compile project(':messaging')
++    compile project(':wrapper')
++    compile project(':baseServices')
++    compile libraries.slf4j_api   // publishCompile (publish.gradle, not used for the bootstrap)
++
++    // testFixturesCompile project(':baseServicesGroovy')   // tests / test-only projects not built for the bootstrap
++    testCompile libraries.groovy
++
++    // lots of integTest errors otherwise
++    // integTestRuntime project(':ide')   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime project(':buildInit')   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime project(':buildComparison')   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime project(":ivy")   // tests / test-only projects not built for the bootstrap
++    // integTestRuntime project(":maven")   // tests / test-only projects not built for the bootstrap
++}
++
++useTestFixtures()
++
++// tests / ide: not used for the bootstrap (gradle-1.0 builder):
++// integTestTasks.all {
++//     dependsOn({ rootProject.getTasksByName('publishLocalArchives', true) }, ':distributions:binZip')
++// }
++
++// tests / ide: not used for the bootstrap (gradle-1.0 builder):
++// daemonIntegTest {
++//     enabled = false //tooling integ tests use daemon anyway, don't rerun
++// }
++
++// jarjarJar (fat tooling api jar), sourceJar, artifacts, publishRuntime: publishing, not used for the bootstrap
++
++// tests / ide: not used for the bootstrap (gradle-1.0 builder):
++// eclipse {
++//     classpath {
++//         file.whenMerged { classpath ->
++//             //**TODO
++//             classpath.entries.removeAll { it.path.contains('src/test/groovy') }
++//             classpath.entries.removeAll { it.path.contains('src/integTest/groovy') }
++//         }
++//     }
++// }
+diff --git a/subprojects/ui/ui.gradle.1.0 b/subprojects/ui/ui.gradle.1.0
+new file mode 100644
+index 00000000000..002157f8f79
+--- /dev/null
++++ b/subprojects/ui/ui.gradle.1.0
+@@ -0,0 +1,31 @@
++// subprojects/ui/ui.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++dependencies {
++    compile project(':core')
++    compile project(':openApi')
++
++    compile libraries.groovy
++
++    compile libraries.dom4j
++    compile libraries.commons_io
++    compile libraries.slf4j_api
++
++    runtime libraries.jaxen
++}
++
++useTestFixtures()
+diff --git a/subprojects/wrapper/wrapper.gradle.1.0 b/subprojects/wrapper/wrapper.gradle.1.0
+new file mode 100644
+index 00000000000..3ef0fa0b0b4
+--- /dev/null
++++ b/subprojects/wrapper/wrapper.gradle.1.0
+@@ -0,0 +1,45 @@
++// subprojects/wrapper/wrapper.gradle of v2.0.0 in the DSL of Gradle 1.0 (the builder of this step), see settings.gradle.1.0
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    compile project(":cli")
++
++    testCompile libraries.groovy
++    testCompile libraries.ant
++
++    // integTestRuntime rootProject.configurations.testRuntime.allDependencies   // tests / test-only projects not built for the bootstrap
++}
++
++task buildReceiptResource(type: Copy, dependsOn: rootProject.createBuildReceipt) {
++    into generatedTestResourcesDir
++    from rootProject.createBuildReceipt.receiptFile
++}
++sourceSets.test.output.dir generatedTestResourcesDir, builtBy: buildReceiptResource
++
++task executableJar(type: Jar) {
++    archiveName = 'gradle-wrapper.jar'
++    from sourceSets.main.output
++    from rootProject.createBuildReceipt
++    from configurations.runtime.allDependencies.withType(ProjectDependency).collect { it.dependencyProject.sourceSets.main.output }
++}
++
++// tests / ide: not used for the bootstrap (gradle-1.0 builder):
++// integTestTasks.all {
++//     inputs.files { project(":distributions").binZip }
++// }
++
++useTestFixtures()
++useClassycle()
+-- 
+2.43.0
+

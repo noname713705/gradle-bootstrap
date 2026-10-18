@@ -1,0 +1,506 @@
+From 4a16e1f1c1a6af42351c08c3c30e6b03a584c7c8 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Tue, 13 Oct 2026 08:38:14 +0200
+Subject: [PATCH] Build REL-0.8 with gradle-0.6 from build files in the 0.6 DSL
+
+The 0.8 build files are unchanged. Added, for the gradle-0.6 builder:
+- settings.gradle.0.6: the projects of settings.gradle with the <name>.gradle.0.6 build files;
+  buildSrc/settings.gradle.0.6 selects buildSrc/build.gradle.0.6
+- build.gradle.0.6, subprojects/*/<name>.gradle.0.6, buildSrc/build.gradle.0.6: copies of the 0.8
+  files translated to 0.6 (classesDir, compile tasks, build.taskGraph, classpaths on the compile
+  tasks, configuration build dependencies); code-quality, ide, test fixtures, integration tests,
+  docs, zips and release left out; subprojects share the root version; project jars taken from
+  the jar tasks; version properties at org/gradle/version.properties
+- svnkit 1.3.5 (org.tmatesoft.svnkit), com.jcraft:jsch: on Maven Central
+Source: MAVEN_CENTRAL_URL https, without trailing slash.
+
+Run: gradle-0.6 -c settings.gradle.0.6 -Dskip.test=true -Dskip.testCompile=true -Dskip.javadoc=true
+  -Dskip.groovydoc=true clean explodedDistBase
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build.gradle.0.6                              | 202 ++++++++++++++++++
+ buildSrc/build.gradle.0.6                     |  31 +++
+ buildSrc/settings.gradle.0.6                  |   3 +
+ settings.gradle.0.6                           |  20 ++
+ subprojects/gradle-core/core.gradle.0.6       | 100 +++++++++
+ .../api/artifacts/ResolverContainer.java      |   2 +-
+ .../gradle-open-api/open-api.gradle.0.6       |   7 +
+ subprojects/gradle-ui/ui.gradle.0.6           |  30 +++
+ subprojects/gradle-wrapper/wrapper.gradle.0.6 |   9 +
+ 9 files changed, 403 insertions(+), 1 deletion(-)
+ create mode 100644 build.gradle.0.6
+ create mode 100644 buildSrc/build.gradle.0.6
+ create mode 100644 buildSrc/settings.gradle.0.6
+ create mode 100644 settings.gradle.0.6
+ create mode 100644 subprojects/gradle-core/core.gradle.0.6
+ create mode 100644 subprojects/gradle-open-api/open-api.gradle.0.6
+ create mode 100644 subprojects/gradle-ui/ui.gradle.0.6
+ create mode 100644 subprojects/gradle-wrapper/wrapper.gradle.0.6
+
+diff --git a/build.gradle.0.6 b/build.gradle.0.6
+new file mode 100644
+index 00000000000..ae3b8455bf9
+--- /dev/null
++++ b/build.gradle.0.6
+@@ -0,0 +1,202 @@
++// build.gradle of REL-0.8 in the DSL of Gradle 0.6 (the builder of this step), see settings.gradle.0.6
++import java.text.SimpleDateFormat
++import java.util.jar.Attributes
++import org.apache.tools.ant.taskdefs.condition.Os
++import org.gradle.api.Task
++import org.gradle.api.artifacts.repositories.WebdavResolver
++import org.gradle.api.tasks.testing.ForkMode
++import org.gradle.api.tasks.wrapper.Wrapper
++import org.gradle.build.release.Svn
++import org.gradle.build.release.Version
++import org.gradle.build.samples.WrapperProjectCreator
++import org.gradle.build.startscripts.StartScriptsGenerator
++import org.apache.ivy.plugins.resolver.*
++
++/**
++ * For building Gradle you usually don't need to specify any properties. Only certain functionality of the Gradle requires
++ * setting certain properties. Those properties can be set in the gradle.properties file in the the gradle user home. The
++ * following properties can be set:
++ *
++ * Uploading distributions to Gradle's release and snapshot repository at codehaus: codehausUserName, codehausUserPassword
++ * Uploading the userguide and the javadoc to Gradle's website: websiteFtpUserName, websiteFtpUserPassword
++ * Using the build to create a new distribution and install it on the local machine: gradle_installPath
++ * Creating a JDK-1.4 compatible distribution with retro-translator: gradle_retroLibsDir (This dir should contain rt.jar, jce.jar and jsse.jar from
++ * a JDK 1.4).
++ */
++
++defaultTasks "clean", "dists"
++
++usePlugin BasePlugin
++
++svn = new Svn(project)
++
++type = 'jar'
++
++buildTime = new Date()
++versionModifier = null
++
++explodedDistDir = new File(distsDir, 'exploded')
++explodedDistDocsDir = new File(explodedDistDir, 'docs')
++explodedDistJavadocsDir = new File(explodedDistDocsDir, 'javadoc')
++explodedDistGroovydocsDir = new File(explodedDistDocsDir, 'groovydoc')
++explodedDistSamplesDir = new File(explodedDistDir, 'samples')
++explodedDistLibDir = new File(explodedDistDir, 'lib')
++samplesSrcDir = file('src/samples')
++userguideOutputDir = new File(samplesSrcDir, 'userguideOutput')
++
++archivesBaseName = 'gradle'
++
++libraries = [
++        ant             : 'org.apache.ant:ant:1.7.0@jar',
++        ant_junit       : 'org.apache.ant:ant-junit:1.7.0@jar',
++        ant_launcher    : 'org.apache.ant:ant-launcher:1.7.0@jar',
++        antlr           : 'antlr:antlr:2.7.7@jar',
++        asm_all         : 'asm:asm-all:2.2.3@jar',
++        commons_cli     : 'commons-cli:commons-cli:1.2@jar',
++        commons_io      : 'commons-io:commons-io:1.4@jar',
++        dom4j           : 'dom4j:dom4j:1.6.1@jar',
++        groovy          : 'org.codehaus.groovy:groovy:1.6.4@jar',
++        jaxen           : 'jaxen:jaxen:1.1@jar',
++        jopt_simple     : 'net.sf.jopt-simple:jopt-simple:2.4.1@jar',
++        jul_to_slf4j    : 'org.slf4j:jul-to-slf4j:1.5.3@jar',
++        logback_classic : 'ch.qos.logback:logback-classic:0.9.9@jar',
++        logback_core    : 'ch.qos.logback:logback-core:0.9.9@jar',
++        slf4j_api       : 'org.slf4j:slf4j-api:1.5.3@jar',
++    ]
++
++libraries.groovy_depends  = [libraries.groovy, libraries.ant, libraries.ant_launcher, libraries.asm_all,
++        libraries.antlr, libraries.commons_cli, libraries.ant_junit]
++
++allprojects {
++    group = 'org.gradle'
++
++    repositories {
++        mavenCentral()
++        add(new URLResolver()) {
++            name = 'sf_gradleRepo'
++            addArtifactPattern('https://gradle.sourceforge.net/gradleRepo/[organisation]/[module](/[branch])/[type]s/[artifact]-[revision](-[classifier])(.[ext])')
++        }
++    }
++
++    // gradle-0.6 builder: subprojects do not inherit the properties of the root project (versionModifier,
++    // previousMajor...) used by Version.toString(): the subprojects share the version of the root project
++    version = project == rootProject ? new Version(svn, project, false) : rootProject.version
++}
++
++def FIRST_LEVEL_JMOCK = ['org.hamcrest:hamcrest-core:1.1@jar', 'org.hamcrest:hamcrest-library:1.1@jar', 'org.jmock:jmock-junit4:2.4.0@jar']
++subprojects {
++
++    usePlugin 'groovy'
++    // gradle-0.6 builder: no plugins.withType(JavaPlugin).whenPluginAdded {} (was in allprojects)
++    sourceCompatibility = 1.5
++    targetCompatibility = 1.5
++    // code-quality (checkstyle, codenarc) not used for the bootstrap
++
++    archivesBaseName = "gradle-${name.replaceAll("\\p{Upper}") { "-${it.toLowerCase()}" } }"
++    dependencies {
++        testCompile "junit:junit:4.5", FIRST_LEVEL_JMOCK
++        testCompile module("org.jmock:jmock:2.4.0") {
++            dependencies('org.jmock:jmock-legacy:2.4.0@jar', 'org.objenesis:objenesis:1.0', 'cglib:cglib-nodep:2.1_3')
++            dependencies(FIRST_LEVEL_JMOCK as Object[])
++        }
++        // todo - these should not be here
++        testCompile 'org.jmock:jmock-legacy:2.4.0@jar', 'org.objenesis:objenesis:1.0', 'cglib:cglib-nodep:2.1_3'
++    }
++
++}
++
++// task ide (IDE classpath helper) left out
++
++configurations {
++    dists
++    distLib {
++        visible = false
++    }
++    ftpAntTask
++    retrotranslatorAntTask
++    userGuideStyleSheets
++    userGuideTask
++}
++
++dependencies {
++    distLib project(':wrapper'), project(':core'), project(':ui'), project(':openApi')
++
++    // todo: Improve dependency handling for xUnit jars
++    ftpAntTask module("org.apache.ant:ant-commons-net:1.7.0") {
++        module("commons-net:commons-net:1.4.1") {
++            dependencies("oro:oro:2.0.8@jar")
++        }
++    }
++
++    retrotranslatorAntTask 'net.sf.retrotranslator:retrotranslator-runtime:1.2.7@jar', 'net.sf.retrotranslator:retrotranslator-transformer:1.2.7@jar',
++            'backport-util-concurrent:backport-util-concurrent:3.1@jar'
++
++    userGuideTask 'xalan:xalan:2.7.1', 'xerces:xercesImpl:2.9.1'
++    userGuideTask module('xhtmlrenderer:xhtmlrenderer:R8rc1') {
++        dependency 'itext:itext:2.0.8@jar'
++    }
++    userGuideTask 'xslthl:xslthl:2.0.1@jar'
++
++    userGuideStyleSheets 'docbook:docbook-xsl:1.75.2@zip'
++}
++
++clean.dependsOn subprojects*.clean
++
++// tasks check and test (aggregates over the subprojects) left out: no check task in gradle-0.6, tests not run
++
++distributionUploadUrl = null
++docsRemoteDir = ''
++javadocRemoteDir = ''
++groovydocRemoteDir = ''
++// gradle-0.6 builder: build.taskGraph (gradle.taskGraph from 0.8)
++build.taskGraph.whenReady {graph ->
++    String prefix = ''
++    if (graph.hasTask(':release')) {
++        versionModifier = ''
++        distributionUploadUrl = 'https://dav.codehaus.org/dist/gradle'
++        prefix = version as String
++    } else {
++        versionModifier = new SimpleDateFormat('yyyyMMddHHmmssZ').format(buildTime)
++        distributionUploadUrl = 'https://dav.codehaus.org/snapshots.dist/gradle'
++        prefix = 'latest'
++    }
++    docsRemoteDir = prefix + '/docs'
++    javadocRemoteDir = docsRemoteDir + '/javadoc'
++    groovydocRemoteDir = docsRemoteDir + '/groovydoc'
++    subprojects {
++      jar.manifest.mainAttributes([
++              (Attributes.Name.IMPLEMENTATION_TITLE.toString()): 'Gradle',
++              (Attributes.Name.IMPLEMENTATION_VERSION.toString()): version.toString(),
++      ])
++    }
++}
++
++// gradle-0.6 builder: a configuration is not a task dependency, its buildDependencies are (the project jars)
++task explodedDistBase(dependsOn: [configurations.distLib.buildDependencies], description: 'Builds a minimal distribution image') << {
++    File explodedDistBinDir = new File(explodedDistDir, 'bin')
++    [explodedDistDir, explodedDistLibDir, explodedDistBinDir]*.mkdirs()
++
++    logger.info('Generate lib dir')
++    removeAnyExistingOldGradleLibs()
++    // gradle-0.6 builder: no project.copy {}; the project jars resolved through distLib lose their version
++    // (internal repository of gradle-0.6): taken from the jar tasks, only the external jars from distLib
++    configurations.distLib.each {File file ->
++        if (!file.name.startsWith("$archivesBaseName-")) { ant.copy(file: file, todir: explodedDistLibDir) }
++    }
++    subprojects.each {p -> ant.copy(file: p.jar.archivePath, todir: explodedDistLibDir) }
++    logger.info('Generate start scripts')
++    StartScriptsGenerator.generate(project(':core').jar.archiveName, explodedDistBinDir, archivesBaseName)
++    logger.info('Copy and generate top level files.')
++    ant.copy(todir: explodedDistDir) { fileset(dir: 'src/toplevel') }
++    // Set permissions (important for running integration tests against the exploded dist)
++    ant.chmod(dir: "$explodedDistDir/bin", perm: "ugo+rx", includes: "**/*")
++}
++
++def removeAnyExistingOldGradleLibs() {
++    ant.delete { fileset(dir: explodedDistLibDir, includes: "$archivesBaseName-*.jar") }
++}
++
++// Left out of build.gradle (REL-0.8) for the bootstrap with gradle-0.6: everything after explodedDistBase,
++// i.e. docs (javadoc, groovydoc, userguide, distDocs, website), samples, zips (allZip, binZip, srcZip,
++// jdk14AllZip), retroTranslateLibs, integration tests (intTestImage, integTest), upload/release, install,
++// wrapper tasks. The distribution is built with: explodedDistBase
+diff --git a/buildSrc/build.gradle.0.6 b/buildSrc/build.gradle.0.6
+new file mode 100644
+index 00000000000..8c4ebfb7454
+--- /dev/null
++++ b/buildSrc/build.gradle.0.6
+@@ -0,0 +1,31 @@
++// buildSrc/build.gradle of REL-0.8 in the DSL of Gradle 0.6 (the builder of this step), see settings.gradle.0.6
++import org.apache.ivy.plugins.resolver.*
++
++usePlugin('groovy')
++// code-quality (checkstyle, codenarc) not used for the bootstrap
++
++repositories {
++    mavenCentral()
++    add(new URLResolver()) {
++        name = 'sf_gradleRepo'
++        addArtifactPattern('https://gradle.sourceforge.net/gradleRepo/[organisation]/[module](/[branch])/[type]s/[artifact]-[revision](-[classifier])(.[ext])')
++    }
++}
++
++dependencies {
++    // com.svnkit:svnkit:1.1.6 is not on Maven Central: org.tmatesoft.svnkit 1.3.5
++    compile 'org.tmatesoft.svnkit:svnkit:1.3.5', 'org.tmatesoft.svnkit:svnkit-javahl:1.3.5'
++    testCompile "junit:junit:4.7"
++}
++// gradle-0.6 builder: no file dependencies, the classpaths are set on the compile tasks (as buildSrc of REL-0.6)
++compile.groovyClasspath = files(org.gradle.util.BootstrapUtil.groovyFiles)
++compileTests.groovyClasspath = files(org.gradle.util.BootstrapUtil.groovyFiles)
++compile.unmanagedClasspath(org.gradle.util.BootstrapUtil.gradleClasspath as File[])
++// the userguide helpers (org.gradle.build.docs) need a newer api: not compiled, docs are not built;
++// a forked groovyc (groovy 1.5) ignores the excludes: compile in-process (buildSrc compiles against the builder anyway)
++compile.groovyExclude('org/gradle/build/docs/**')
++compile.groovyOptions.fork = false
++
++
++// task ide (IDE classpath helper) left out
++
+diff --git a/buildSrc/settings.gradle.0.6 b/buildSrc/settings.gradle.0.6
+new file mode 100644
+index 00000000000..e24f8de8e53
+--- /dev/null
++++ b/buildSrc/settings.gradle.0.6
+@@ -0,0 +1,3 @@
++// Settings of the buildSrc build when building Gradle 0.8 with Gradle 0.6: buildSrc uses build.gradle.0.6
++// (selected by settings.gradle.0.6 in the root directory)
++rootProject.buildFileName = 'build.gradle.0.6'
+diff --git a/settings.gradle.0.6 b/settings.gradle.0.6
+new file mode 100644
+index 00000000000..cc977c2ebe4
+--- /dev/null
++++ b/settings.gradle.0.6
+@@ -0,0 +1,20 @@
++// Settings for building Gradle 0.8 (REL-0.8 sources) with Gradle 0.6, the builder of this step.
++// Same projects as settings.gradle, but every build file is the <name>.0.6 one, in the DSL of Gradle 0.6.
++// usage: gradle-0.6 -c settings.gradle.0.6 -Dskip.<task>=true ... clean <dist task>
++include 'wrapper'
++include 'core'
++include 'ui'
++include 'openApi'
++
++rootProject.name = 'gradle'
++rootProject.buildFileName = 'build.gradle.0.6'
++rootProject.children.each {project ->
++    String fileBaseName = project.name.replaceAll("\\p{Upper}") { "-${it.toLowerCase()}" }
++    project.projectDir = new File(settingsDir, "subprojects/gradle-$fileBaseName")
++    project.buildFileName = "${fileBaseName}.gradle.0.6"
++    assert project.projectDir.isDirectory()
++    assert project.buildFile.isFile()
++}
++// the -b option and the build file names above do not apply to buildSrc: its own settings file selects
++// buildSrc/build.gradle.0.6 (a build file set here is lost when gradle 0.6 starts the buildSrc build)
++getBuildSrcStartParameter().setSettingsFile(new File(settingsDir, 'buildSrc/settings.gradle.0.6'))
+diff --git a/subprojects/gradle-core/core.gradle.0.6 b/subprojects/gradle-core/core.gradle.0.6
+new file mode 100644
+index 00000000000..f429a9009eb
+--- /dev/null
++++ b/subprojects/gradle-core/core.gradle.0.6
+@@ -0,0 +1,100 @@
++// subprojects/gradle-core/core.gradle of REL-0.8 in the DSL of Gradle 0.6 (the builder of this step), see settings.gradle.0.6
++import java.text.DateFormat
++
++usePlugin 'groovy'
++
++configurations {
++    testFixtures
++    testFixturesRuntime {
++        extendsFrom testFixtures, testRuntime
++    }
++}
++
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile "commons-httpclient:commons-httpclient:3.0@jar", "commons-codec:commons-codec:1.2@jar", "org.slf4j:jcl-over-slf4j:1.5.3@jar"
++
++    // Needed by the eclipse plugin
++    compile "dom4j:dom4j:1.6.1@jar", "jaxen:jaxen:1.1@jar"
++
++    compile "org.mortbay.jetty:jetty-plus:6.1.14@jar",
++            "org.mortbay.jetty:jetty-util:6.1.14@jar",
++            "javax.servlet:servlet-api:2.5@jar"
++
++    // todo - the transtive dependencies should be runtime dependencies
++    // todo jsp stuff should be bundled
++    compile "org.mortbay.jetty:jetty:6.1.14@jar", "javax.servlet:servlet-api:2.5@jar",
++                libraries.ant,
++                "org.mortbay.jetty:jsp-api-2.1:6.1.14@jar",
++                "org.mortbay.jetty:jsp-2.1:6.1.14@jar",
++                "org.eclipse.jdt:core:3.1.1@jar",
++                "org.mortbay.jetty:jetty-util:6.1.14@jar",
++                "org.mortbay.jetty:jetty-naming:6.1.14@jar",
++                "org.mortbay.jetty:jetty-annotations:6.1.14@jar"
++
++    // jsch:jsch:0.1.31 is not on Maven Central: com.jcraft:jsch:0.1.31 (same version)
++    compile "org.apache.ivy:ivy:2.1.0-rc2@jar", "com.jcraft:jsch:0.1.31@jar"
++
++    compile "net.sf.jopt-simple:jopt-simple:2.4.1@jar",
++            libraries.ant,
++            "org.apache.ant:ant-nodeps:1.7.0@jar",
++            "ch.qos.logback:logback-classic:0.9.9@jar",
++            "org.slf4j:slf4j-api:1.5.3@jar",
++            "org.slf4j:jul-to-slf4j:1.5.3@jar",
++            "ch.qos.logback:logback-core:0.9.9@jar",
++            libraries.commons_io,
++            "commons-lang:commons-lang:2.3@jar",
++            "commons-codec:commons-codec:1.2@jar",
++            "commons-collections:commons-collections:3.2.1@jar",
++            "slide:webdavlib:2.0@jar",
++            "biz.aQute:bndlib:0.0.255@jar",
++            "org.apache.maven:maven-ant-tasks:2.0.9@jar",
++            libraries.asm_all
++
++    runtime "org.slf4j:log4j-over-slf4j:1.5.3@jar", "org.slf4j:jcl-over-slf4j:1.5.3@jar"
++
++    compile "org.codenarc:CodeNarc:0.7@jar", "org.slf4j:log4j-over-slf4j:1.5.3@jar"
++
++    testCompile "xmlunit:xmlunit:1.2"
++
++    runtime libraries.ant_junit,
++            libraries.ant_launcher,
++            "org.apache.ant:ant-trax:1.7.0@jar"
++
++    def BEAN_UTILS = ["commons-beanutils:commons-beanutils-core:1.7.0@jar", "commons-collections:commons-collections:2.0@jar", "org.slf4j:jcl-over-slf4j:1.5.3@jar"]
++    runtime "checkstyle:checkstyle:5.0@jar", libraries.antlr, "org.slf4j:jcl-over-slf4j:1.5.3@jar",
++            "com.google.collections:google-collections:0.9@jar", BEAN_UTILS
++
++    // testFixtures (test classes for the tests of other subprojects) left out: no source sets in gradle-0.6, tests not run
++}
++
++jar.manifest.mainAttributes("Main-Class": "org.gradle.BootstrapMain")
++
++processResources.doLast {
++    // gradle-0.6 builder: classesDir (source.main.classesDir from 0.8); GradleVersion here is the class of the
++    // builder (0.6: 'version.properties'), the 0.8 code reads '/org/gradle/version.properties': written literally
++    String versionFileName = 'org/gradle/version.properties'
++    File versionPropertiesDestination = new File(classesDir, versionFileName)
++    [versionPropertiesDestination, new File(buildDir, "resources/test/$versionFileName")].each { File file ->
++        logger.info('Write version properties to: {}', file.absoluteFile)
++        Properties versionProperties = new Properties()
++        versionProperties.putAll([
++                (GradleVersion.VERSION): version.toString(),
++                (GradleVersion.BUILD_TIME): DateFormat.getDateTimeInstance(DateFormat.FULL, DateFormat.FULL).format(buildTime)
++        ])
++        file.parentFile.mkdirs()
++        file.withOutputStream {
++            versionProperties.store(it, '')
++        }
++    }
++}
++
++// gradle-0.6 builder: compile tasks are compile and compileTests (compileGroovy, compileTestGroovy from 0.8)
++[compile, compileTests]*.groovyOptions*.fork(memoryInitialSize: '128M', memoryMaximumSize: '1G')
++
++test {
++    options.fork(jvmArgs: ["-ea", '-Xms128m', '-Xmx1100m', '-XX:MaxPermSize=128m', '-XX:+HeapDumpOnOutOfMemoryError'])
++
++    exclude 'org/gradle/integtests/**/*IntegrationTest.*'
++}
+diff --git a/subprojects/gradle-core/src/main/groovy/org/gradle/api/artifacts/ResolverContainer.java b/subprojects/gradle-core/src/main/groovy/org/gradle/api/artifacts/ResolverContainer.java
+index 856cdd90992..b72edc14aad 100644
+--- a/subprojects/gradle-core/src/main/groovy/org/gradle/api/artifacts/ResolverContainer.java
++++ b/subprojects/gradle-core/src/main/groovy/org/gradle/api/artifacts/ResolverContainer.java
+@@ -53,7 +53,7 @@
+  */
+ public interface ResolverContainer extends DomainObjectContainer<DependencyResolver> {
+     String DEFAULT_MAVEN_CENTRAL_REPO_NAME = "MavenRepo";
+-    String MAVEN_CENTRAL_URL = "http://repo1.maven.org/maven2/";
++    String MAVEN_CENTRAL_URL = "https://repo1.maven.org/maven2";
+     String MAVEN_REPO_PATTERN = "[organisation]/[module]/[revision]/[artifact]-[revision](-[classifier]).[ext]";
+     String FLAT_DIR_RESOLVER_PATTERN = "[artifact](-[revision])(-[classifier]).[ext]";
+     String DEFAULT_CACHE_ARTIFACT_PATTERN
+diff --git a/subprojects/gradle-open-api/open-api.gradle.0.6 b/subprojects/gradle-open-api/open-api.gradle.0.6
+new file mode 100644
+index 00000000000..12c6c49736a
+--- /dev/null
++++ b/subprojects/gradle-open-api/open-api.gradle.0.6
+@@ -0,0 +1,7 @@
++// subprojects/gradle-open-api/open-api.gradle of REL-0.8 in the DSL of Gradle 0.6 (the builder of this step), see settings.gradle.0.6
++usePlugin 'groovy'
++
++dependencies {
++    groovy libraries.groovy_depends
++}
++
+diff --git a/subprojects/gradle-ui/ui.gradle.0.6 b/subprojects/gradle-ui/ui.gradle.0.6
+new file mode 100644
+index 00000000000..f9a960810a1
+--- /dev/null
++++ b/subprojects/gradle-ui/ui.gradle.0.6
+@@ -0,0 +1,30 @@
++// subprojects/gradle-ui/ui.gradle of REL-0.8 in the DSL of Gradle 0.6 (the builder of this step), see settings.gradle.0.6
++dependencies {
++   compile project(':core')
++   compile project(':openApi')
++
++    groovy libraries.groovy_depends
++
++
++    compile libraries.jopt_simple,
++            libraries.dom4j,
++            libraries.jaxen,
++            libraries.commons_io,
++            libraries.logback_classic,
++            libraries.slf4j_api,
++            libraries.jul_to_slf4j,
++            libraries.logback_core
++
++    // testFixtures dependencies on :core left out: tests not run (and no testFixtures in core.gradle.0.6)
++}
++
++// integTest (needs the integration test image of the root project) left out, tests not run;
++// compileJava.options.depend() (incremental compile, task compileJava from 0.8) left out
++
++//this is just to exclude integration tests
++test {
++    // We set forkmode to ONCE as our tests are written in Groovy and the startup time of Groovy is significant.
++    options.fork(jvmArgs: ["-ea", '-Xms128m', '-Xmx1g', '-XX:MaxPermSize=128m', '-XX:+HeapDumpOnOutOfMemoryError'])
++
++    exclude 'org/gradle/integtests/**/*.*'
++}
+diff --git a/subprojects/gradle-wrapper/wrapper.gradle.0.6 b/subprojects/gradle-wrapper/wrapper.gradle.0.6
+new file mode 100644
+index 00000000000..737a3beb9c3
+--- /dev/null
++++ b/subprojects/gradle-wrapper/wrapper.gradle.0.6
+@@ -0,0 +1,9 @@
++// subprojects/gradle-wrapper/wrapper.gradle of REL-0.8 in the DSL of Gradle 0.6 (the builder of this step), see settings.gradle.0.6
++usePlugin 'groovy'
++
++dependencies {
++    groovy libraries.groovy_depends
++    // testFixtures dependencies on :core left out: tests not run (and no testFixtures in core.gradle.0.6)
++}
++
++manifest.mainAttributes("Main-Class": 'org.gradle.wrapper.WrapperMain')
+-- 
+2.43.0
+

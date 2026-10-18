@@ -1,0 +1,479 @@
+From 8a5250bcf7a0446286b9d1cb2cd7ddd0c1b71302 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Sat, 10 Oct 2026 00:53:59 +0200
+Subject: [PATCH 1/2] Build REL-0.4 with gradle-0.2
+
+- deps from Maven Central (groups, addMavenRepo, ivy 2.0.0), Maven URL https without trailing slash
+- build scripts adapted to the 0.2 builder: no appendix (classifier + baseName), task names gradle_*,
+  configureByDag instead of init.doFirst(task, dag), logger.warn, convert(dependencies)
+- docs dropped (javadoc, groovydoc), launch4j skipped (not on Maven Central), tests disabled
+- buildSrc: svnkit 1.3.5 (buildSrc/lib), VersionTest removed (needs 0.4 classes)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build.gradle                                  | 133 ++++++++++--------
+ buildSrc/build.gradle                         |   5 +-
+ .../gradle/build/release/VersionTest.groovy   | 128 -----------------
+ .../org/gradle/api/DependencyManager.java     |   2 +-
+ 4 files changed, 76 insertions(+), 192 deletions(-)
+ delete mode 100644 buildSrc/src/test/groovy/org/gradle/build/release/VersionTest.groovy
+
+diff --git a/build.gradle b/build.gradle
+index 13fac6262ad..ac7a62fedab 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -61,54 +61,56 @@ dependencies {
+     addConfiguration('retrotranslatorAntTask')
+     addConfiguration('launch4j')
+ 
+-    clientModule(['ftpAntTask'], ":ant-commons-net:1.7.0") {
+-        clientModule(":commons-net:1.4.1") {
+-            dependencies(":oro:2.0.8@jar")
++    clientModule(['ftpAntTask'], "org.apache.ant:ant-commons-net:1.7.0") {
++        clientModule("commons-net:commons-net:1.4.1") {
++            dependencies("oro:oro:2.0.8@jar")
+         }
+     }
+ 
+-    retrotranslatorAntTask ':retrotranslator-runtime:1.2.7', ':retrotranslator-transformer:1.2.7', ':backport-util-concurrent:3.1'
++    retrotranslatorAntTask 'net.sf.retrotranslator:retrotranslator-runtime:1.2.7', 'net.sf.retrotranslator:retrotranslator-transformer:1.2.7', 'backport-util-concurrent:backport-util-concurrent:3.1'
+ 
+-    clientModule(['groovy'], ":groovy-all:1.5.5") {
+-        clientModule(":ant:1.7.0") {
+-            dependencies(":ant-junit:1.7.0@jar", ":ant-launcher:1.7.0")
++    clientModule(['groovy'], "org.codehaus.groovy:groovy-all:1.5.5") {
++        clientModule("org.apache.ant:ant:1.7.0") {
++            dependencies("org.apache.ant:ant-junit:1.7.0@jar", "org.apache.ant:ant-launcher:1.7.0")
+         }
+     }
+ 
+-    clientModule(['compile'], ":commons-httpclient:3.0") {
+-        dependencies(":commons-codec:1.2", ":commons-logging:1.0.3")
++    clientModule(['compile'], "commons-httpclient:commons-httpclient:3.0") {
++        dependencies("commons-codec:commons-codec:1.2", "commons-logging:commons-logging:1.0.3")
+     }
+ 
+-    dependency(['runtime'], ":ant-junit:1.7.0") {
++    dependency(['runtime'], "org.apache.ant:ant-junit:1.7.0") {
+         exclude(module: 'junit')
+     }
+-    compile ":jopt-simple:2.4.1",
+-            ":ant:1.7.0",
+-            ":logback-classic:0.9.8",
+-            ":slf4j-api:1.4.3",
+-            ":logback-core:0.9.8",
+-            ":commons-io:1.4@jar",
+-            ":commons-lang:2.3@jar",
+-            ":webdavlib:2.0",
+-            ":logback-classic:0.9.8",
+-            ":ivy:2.0.0.cr1_20080911151837@jar",
+-            ":dom4j:1.6.1@jar"
+-    runtime ":ant-launcher:1.7.0",
+-            ":ant-nodeps:1.7.0",
+-            ":ant-trax:1.7.0",
+-            ":junit:4.4"
+-
+-    def FIRST_LEVEL_JMOCK = [':hamcrest-core:1.1', ':hamcrest-library:1.1', ':jmock-junit4:2.4.0']
+-    testCompile ":junit:4.4", FIRST_LEVEL_JMOCK
+-    clientModule(['testCompile'], ":jmock:2.4.0") {
+-        dependencies(':jmock-legacy:2.4.0', ':objenesis:1.0', ':cglib-nodep:2.1_3', FIRST_LEVEL_JMOCK)
++    compile "net.sf.jopt-simple:jopt-simple:2.4.1",
++            "org.apache.ant:ant:1.7.0",
++            "ch.qos.logback:logback-classic:0.9.8",
++            "org.slf4j:slf4j-api:1.4.3",
++            "ch.qos.logback:logback-core:0.9.8",
++            "commons-io:commons-io:1.4@jar",
++            "commons-lang:commons-lang:2.3@jar",
++            "slide:webdavlib:2.0",
++            "ch.qos.logback:logback-classic:0.9.8",
++            "org.apache.ivy:ivy:2.0.0@jar",
++            "dom4j:dom4j:1.6.1@jar"
++    runtime "org.apache.ant:ant-launcher:1.7.0",
++            "org.apache.ant:ant-nodeps:1.7.0",
++            "org.apache.ant:ant-trax:1.7.0",
++            "junit:junit:4.4"
++
++    def FIRST_LEVEL_JMOCK = ['org.hamcrest:hamcrest-core:1.1', 'org.hamcrest:hamcrest-library:1.1', 'org.jmock:jmock-junit4:2.4.0']
++    testCompile "junit:junit:4.4", FIRST_LEVEL_JMOCK
++    clientModule(['testCompile'], "org.jmock:jmock:2.4.0") {
++        dependencies('org.jmock:jmock-legacy:2.4.0', 'org.objenesis:objenesis:1.0', 'cglib:cglib-nodep:2.1_3', FIRST_LEVEL_JMOCK)
+     }
+-    distLib ":junit:4.4"
++    distLib "junit:junit:4.4"
+     launch4j ":launch4j-base:$launch4jVersion@zip", ":launch4j-bin-mac:$launch4jVersion@zip",
+             ":launch4j-bin-windows:$launch4jVersion@zip", ":launch4j-bin-unix:$launch4jVersion@zip"
++    addMavenRepo()
+ }
+ 
+-init.doFirst {Task task, Dag dag ->
++// gradle-0.2 builder: task actions get no dag, configureByDag is the equivalent
++configureByDag = {Dag dag ->
+     if (dag.hasTask(':release')) {
+         versionModifier = ''
+         distributionUploadUrl = 'https://dav.codehaus.org/dist/gradle'
+@@ -137,14 +139,19 @@ resources.doLast {
+ }
+ 
+ test {
+-    include '**/*Test.class'
+-    exclude '**/Abstract*'
++    // tests disabled for the bootstrap (see README)
++    // include '**/*Test.class'
++    // exclude '**/Abstract*'
++    exclude '**'
+     // We set forkmode to ONCE as our tests are written in Groovy and the startup time of Groovy is significant.
+     options.fork(forkMode: ForkMode.ONCE, jvmArgs: ["-ea", "-Dgradle.home=roadToNowhere"])
+ }
+ 
+ libs {
+-    jar(appendix: 'wrapper') {
++    // gradle-0.2 builder has no appendix: classifier gives the task name, the file name is set below
++    jar(classifier: 'wrapper') {
++        baseName = "$archivesBaseName-wrapper"
++        classifier = ''
+         fileSet(dir: classesDir) {
+             include 'org/gradle/wrapper/'
+         }
+@@ -152,7 +159,7 @@ libs {
+     }
+ }
+ 
+-archive_jar.manifest.mainAttributes("Main-Class": "org.gradle.BootstrapMain")
++gradle_jar.manifest.mainAttributes("Main-Class": "org.gradle.BootstrapMain")
+ 
+ explodedDistDir = new File(distsDir, 'exploded')
+ explodedDistDocsDir = new File(explodedDistDir, 'docs')
+@@ -162,7 +169,8 @@ explodedDistSamplesDir = new File(explodedDistDir, 'samples')
+ explodedDistUserguideOutputDir = new File(explodedDistSamplesDir, 'userguideOutput')
+ explodedDistLibDir = new File(explodedDistDir, 'lib')
+ 
+-createTask('explodedDistBase', dependsOn: ['libs', 'javadoc', 'groovydoc']) {
++// docs dropped (javadoc, groovydoc): not needed, no groovydoc in gradle-0.2
++createTask('explodedDistBase', dependsOn: ['libs']) {
+     [explodedDistDir, explodedDistSamplesDir, explodedDistLibDir]*.mkdirs()
+     File explodedDistBinDir = mkdir(explodedDistDir, 'bin')
+     File explodedDistSrcDir = mkdir(explodedDistDir, 'src')
+@@ -173,16 +181,17 @@ createTask('explodedDistBase', dependsOn: ['libs', 'javadoc', 'groovydoc']) {
+         dependencies.resolve('distLib').each {File file ->
+             copy(file: file, todir: explodedDistLibDir)
+         }
+-        dependencies.resolve('launch4j').each {File file ->
+-            copy(file: file, todir: explodedDistLaunch4jLibDir)
+-        }
++        // launch4j (windows exe wrapper) is not on Maven Central, not needed for the bootstrap
++        // dependencies.resolve('launch4j').each {File file ->
++        //     copy(file: file, todir: explodedDistLaunch4jLibDir)
++        // }
+         // todo: find out why Ivy does not include the jar in the resolve
+-        copy(file: archive_jar.archivePath, toDir: explodedDistLibDir)
+-        copy(file: archive_wrapper_jar.archivePath, toDir: explodedDistLibDir)
++        copy(file: gradle_jar.archivePath, toDir: explodedDistLibDir)
++        copy(file: gradle_wrapper_jar.archivePath, toDir: explodedDistLibDir)
+         logger.info('Generate start scripts')
+         StartScriptsGenerator.generate("$archivesBaseName-${version}.jar", explodedDistBinDir, archivesBaseName)
+         logger.info('Generate and copy samples.')
+-        WrapperProjectCreator.createProject(explodedDistSamplesDir, task('archive_bin_zip').archivePath.parentFile,
++        WrapperProjectCreator.createProject(explodedDistSamplesDir, task('gradle_bin_zip').archivePath.parentFile,
+                 version.toString())
+         copy(toDir: explodedDistSamplesDir) {fileset(dir: new File(srcRoot, 'samples'))}
+         logger.info('Copy binary sources.')
+@@ -198,7 +207,8 @@ createTask('explodedDistBase', dependsOn: ['libs', 'javadoc', 'groovydoc']) {
+         chmod(dir: "$explodedDistDir/bin", perm: "ugo+rx", includes: "**/*")
+         logger.info('Generate launch4j windows exe.')
+         String launch4jDistName = "launch4j-" + launch4jVersion
+-        createLaunch4j(explodedDistLaunch4jLibDir, launch4jDistName)
++        // launch4j not available (see above), the exe generation below then only logs a warning
++        // createLaunch4j(explodedDistLaunch4jLibDir, launch4jDistName)
+         try {
+             ant.taskdef(
+                     name: "launch4j",
+@@ -206,13 +216,13 @@ createTask('explodedDistBase', dependsOn: ['libs', 'javadoc', 'groovydoc']) {
+                     classpath: "$buildDir/$launch4jDistName/launch4j.jar:$buildDir/$launch4jDistName/lib/xstream.jar")
+             ant.launch4j() {
+                 config(headerType: "console", outfile: "$explodedDistBinDir/gradle.exe",
+-                        dontWrapJar: "true", jarPath: "../lib/" + archive_jar.archiveName) {
++                        dontWrapJar: "true", jarPath: "../lib/" + gradle_jar.archiveName) {
+                     jre(minVersion: "1.5.0", jdkPreference: 'jdkOnly')
+                 }
+             }
+         } catch (Exception e) {
+-            logger.warning("The windows start exe could not be generated. Possibly you run the build on a machine with an OS which is not Linux, Mac OS X or Windows.")
+-            logger.warning(e.getMessage());
++            logger.warn("The windows start exe could not be generated. Possibly you run the build on a machine with an OS which is not Linux, Mac OS X or Windows.")
++            logger.warn(e.getMessage());
+         }
+     }
+ }
+@@ -256,7 +266,7 @@ createTask('retroTranslateLibs', dependsOn: 'explodedDist') {
+     }
+ }.configure {
+     enabled = hasProperty('gradle_retroLibsDir')
+-    skipProperties << 'skip.archive_all-jdk14_zip'
++    skipProperties << 'skip.gradle_all-jdk14_zip'
+ }
+ 
+ void retroExe(File file, Closure fileSet) {
+@@ -335,16 +345,17 @@ dists {
+     }
+ }
+ 
+-groovydoc.destinationDir = explodedDistGroovydocsDir
++// no groovydoc task in gradle-0.2: groovydoc.destinationDir = explodedDistGroovydocsDir
+ 
+-javadoc {
+-    title = "Gradle API $version"
+-    destinationDir = explodedDistJavadocsDir
+-    include 'org/gradle/api/**'
+-    exclude 'org/gradle/api/internal/**'
+-    // todo understand why not excluding this leads to a javadoc exception 
+-    exclude 'org/gradle/api/plugins/DefaultConventionsToPropertiesMapping.java'
+-}
++// javadoc config disabled: different api in the gradle-0.2 builder, docs not needed
++// javadoc {
++//     title = "Gradle API $version"
++//     destinationDir = explodedDistJavadocsDir
++//     include 'org/gradle/api/**'
++//     exclude 'org/gradle/api/internal/**'
++//     // todo understand why not excluding this leads to a javadoc exception 
++//     exclude 'org/gradle/api/plugins/DefaultConventionsToPropertiesMapping.java'
++// }
+ 
+ createTask('uploadJavadoc', dependsOn: ['javadoc', 'init']) {
+     ftp(action: 'mkdir', remotedir: javadocRemoteDir)
+@@ -449,7 +460,7 @@ createTask('install', dependsOn: 'integTest') {
+ }
+ 
+ void windowsInstall() {
+-    ant.unzip(src: task('archive_all_zip').archivePath, dest: gradle_installDir)
++    ant.unzip(src: task('gradle_all_zip').archivePath, dest: gradle_installDir)
+ }
+ 
+ /**
+@@ -460,7 +471,7 @@ void asternixInstall() {
+         arg(value: '-q')
+         arg(value: '-d')
+         arg(value: gradle_installDir)
+-        arg(value: "${task('archive_all_zip').archivePath}")
++        arg(value: "${task('gradle_all_zip').archivePath}")
+     }
+ }
+ 
+@@ -481,7 +492,7 @@ createTask('release', dependsOn: ['uploadDists', 'uploadUserguide', 'uploadJavad
+     svn.release()
+ }
+ 
+-createTask('wrapper', type: Wrapper, dependsOn: ['init', 'archive_bin_zip']).doFirst { task ->
++createTask('wrapper', type: Wrapper, dependsOn: ['init', 'gradle_bin_zip']).doFirst { task ->
+     task.configure {
+         gradleVersion = version
+         archiveBase = Wrapper.PathBase.PROJECT
+@@ -491,7 +502,7 @@ createTask('wrapper', type: Wrapper, dependsOn: ['init', 'archive_bin_zip']).doF
+ }
+ 
+ wrapper.doLast {
+-    def binDistZip = project.archive_bin_zip.archivePath
++    def binDistZip = project.gradle_bin_zip.archivePath
+     ant.copy(file: binDistZip, toDir: 'wrapper')
+ }
+ 
+diff --git a/buildSrc/build.gradle b/buildSrc/build.gradle
+index c7bfd7b6c2f..dc885b880c3 100644
+--- a/buildSrc/build.gradle
++++ b/buildSrc/build.gradle
+@@ -7,7 +7,8 @@ usePlugin('groovy')
+ 
+ dependencies {
+     addFlatDirResolver('lib', new File(rootDir, 'lib'))
+-    dependencies(['compile'], ":svnkit:1.1.6", ":svnkit-javahl:1.1.6", ":xmlunit:1.2")
++    dependencies(['compile'], ":svnkit:1.3.5", ":svnkit-javahl:1.3.5", "xmlunit:xmlunit:1.2")
++    addMavenRepo()
+ }
+ 
+ sourceCompatibility = 1.5
+@@ -29,7 +30,7 @@ uploadLibs.doLast {
+     installOptions.overwrite = true
+     installOptions.validate = false
+     def ivy = dependencies.ivy
+-    DefaultModuleDescriptor moduleDescriptor = dependencies.moduleDescriptorConverter.convert(dependencies, true)
++    DefaultModuleDescriptor moduleDescriptor = dependencies.moduleDescriptorConverter.convert(dependencies)
+     moduleDescriptor.dependencies.each { DependencyDescriptor dependencyDescriptor ->
+         ivy.install(dependencyDescriptor.dependencyRevisionId, 'lib', DependencyManager.BUILD_RESOLVER_NAME, installOptions)
+     }
+diff --git a/buildSrc/src/test/groovy/org/gradle/build/release/VersionTest.groovy b/buildSrc/src/test/groovy/org/gradle/build/release/VersionTest.groovy
+deleted file mode 100644
+index 77d3790277e..00000000000
+--- a/buildSrc/src/test/groovy/org/gradle/build/release/VersionTest.groovy
++++ /dev/null
+@@ -1,128 +0,0 @@
+-/*
+- * Copyright 2007 the original author or authors.
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-package org.gradle.build.release
+-
+-import org.gradle.api.internal.dependencies.DefaultDependencyManagerFactory
+-import org.gradle.api.internal.project.*
+-import org.gradle.groovy.scripts.EmptyScript
+-import org.gradle.util.GradleUtil
+-import org.gradle.groovy.scripts.StringScriptSource
+-
+-/**
+- * @author Hans Dockter
+- */
+-class VersionTest extends GroovyTestCase {
+-    Version version
+-    boolean trunk
+-    DefaultProject project
+-    Svn svn
+-    File testDir
+-
+-    void setUp() {
+-        testDir = GradleUtil.makeNewDir(new File('tmpTest'))
+-        File rootDir = new File(testDir, 'root')
+-        rootDir.mkdir()
+-        project = createRootProject(rootDir);
+-        project.previousMajor = '1'
+-        project.previousMinor = '2'
+-        project.previousRevision = '3'
+-        svn = [isTrunk: {trunk}] as Svn
+-        version = new Version(svn, project, false)
+-    }
+-
+-    DefaultProject createRootProject(File rootDir) {
+-        IProjectFactory projectFactory = new ProjectFactory(
+-                new TaskFactory(),
+-                new DefaultDependencyManagerFactory(new File('root')),
+-                new BuildScriptProcessor(),
+-                new PluginRegistry(),
+-                "build.gradle",
+-                new DefaultProjectRegistry(),
+-                new StringScriptSource("embedded build file", "embedded"))
+-
+-        DefaultProject project = projectFactory.createProject(rootDir.name, null, rootDir, rootDir, null)
+-        project.setBuildScript(new EmptyScript())
+-        return project;
+-    }
+-
+-    void tearDown() {
+-        GradleUtil.deleteDir(testDir)
+-    }
+-
+-    void testFalseTrunkMinor() {
+-        trunk = true
+-        assertEquals(1, version.major)
+-        assertEquals(3, version.minor)
+-        assertEquals(0, version.revision)
+-    }
+-
+-    void testTrueTrunkMinor() {
+-        trunk = false
+-        assertEquals(1, version.major)
+-        assertEquals(2, version.minor)
+-        assertEquals(4, version.revision)
+-    }
+-
+-    void testFalseTrunkMajor() {
+-        version = new Version(svn, project, true)
+-        trunk = true
+-        assertEquals(2, version.major)
+-        assertEquals(0, version.minor)
+-        assertEquals(0, version.revision)
+-    }
+-
+-    void testTrueTrunkMajor() {
+-        version = new Version(svn, project, true)
+-        trunk = false
+-        assertEquals(1, version.major)
+-        assertEquals(2, version.minor)
+-        assertEquals(4, version.revision)
+-    }
+-
+-    void testGetLastRelease() {
+-        assertEquals('1.2.3', version.lastRelease)
+-        project.previousRevision = 0
+-        version = new Version(svn, project, false)
+-        assertEquals('1.2', version.lastRelease)
+-    }
+-
+-    void testToString() {
+-        trunk = false
+-        project.versionModifier = ''
+-        assertEquals("1.2.4", version.toString())
+-        project.versionModifier = 'a'
+-        assertEquals("1.2.4-a", version.toString())
+-
+-        trunk = true
+-        project.versionModifier = ''
+-        assertEquals("1.3", version.toString())
+-        project.versionModifier = 'a'
+-        assertEquals("1.3-a", version.toString())
+-    }
+-
+-    void testStoreCurrentVersion() {
+-        trunk = false
+-        version.storeCurrentVersion()
+-        Properties properties = new Properties()
+-        properties.load(new FileInputStream(new File(project.projectDir, 'gradle.properties')))
+-        assertEquals('1', properties.previousMajor)
+-        assertEquals('2', properties.previousMinor)
+-        assertEquals('4', properties.previousRevision)
+-    }
+-
+-
+-}
+diff --git a/src/main/groovy/org/gradle/api/DependencyManager.java b/src/main/groovy/org/gradle/api/DependencyManager.java
+index d1aeafb1bcc..956f33780de 100644
+--- a/src/main/groovy/org/gradle/api/DependencyManager.java
++++ b/src/main/groovy/org/gradle/api/DependencyManager.java
+@@ -41,7 +41,7 @@ public interface DependencyManager extends DependencyContainer {
+ 
+     public static final String DEFAULT_ARTIFACT_PATTERN = "/[artifact]-[revision](-[classifier]).[ext]";
+ 
+-    public static final String MAVEN_REPO_URL = "http://repo1.maven.org/maven2/";
++    public static final String MAVEN_REPO_URL = "https://repo1.maven.org/maven2";
+ 
+     public static final String BUILD_RESOLVER_NAME = "build-resolver";
+ 
+-- 
+2.43.0
+
+
+From bdbfe450430a418970545eab8f2db3f6efb5d92c Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Mon, 12 Oct 2026 23:43:57 +0200
+Subject: [PATCH 2/2] buildSrc: svnkit 1.3.5 from Maven Central instead of the
+ untracked buildSrc/lib
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ buildSrc/build.gradle | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/buildSrc/build.gradle b/buildSrc/build.gradle
+index dc885b880c3..867cc1e21c5 100644
+--- a/buildSrc/build.gradle
++++ b/buildSrc/build.gradle
+@@ -7,7 +7,7 @@ usePlugin('groovy')
+ 
+ dependencies {
+     addFlatDirResolver('lib', new File(rootDir, 'lib'))
+-    dependencies(['compile'], ":svnkit:1.3.5", ":svnkit-javahl:1.3.5", "xmlunit:xmlunit:1.2")
++    dependencies(['compile'], "org.tmatesoft.svnkit:svnkit:1.3.5", "org.tmatesoft.svnkit:svnkit-javahl:1.3.5", "xmlunit:xmlunit:1.2")
+     addMavenRepo()
+ }
+ 
+-- 
+2.43.0
+

@@ -1,0 +1,40 @@
+From 733559c51bb3998b6c523a1f38835c43c63b13e9 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Fri, 16 Oct 2026 21:12:30 +0200
+Subject: [PATCH] Build Gradle 9.4.0 from its original build files with Gradle
+ 9.0 (one build-logic fix)
+
+Built by target/gradle-9.0 (rebuilt from REL_9.0 by the minimal bootstrap
+scripts/GradleMinimalBootstrap90.java). Fix, marked "bootstrap:":
+- build-logic build-update-utils AbstractVersionsUpdateTask: XMLConstants.ACCESS_EXTERNAL_DTD /
+  ACCESS_EXTERNAL_SCHEMA replaced by their values (the Gradle 9.0 API classpath has the old
+  javax.xml.XMLConstants of xml-apis 1.4.01, without them)
+
+Run (JDK 17): IGNORE_MIRROR=true gradle -Porg.gradle.java.installations.auto-download=false
+  install -Pgradle_installPath=build/distributions/rebuilt-9.0
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../buildutils/tasks/AbstractVersionsUpdateTask.kt          | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/build-logic/build-update-utils/src/main/kotlin/gradlebuild/buildutils/tasks/AbstractVersionsUpdateTask.kt b/build-logic/build-update-utils/src/main/kotlin/gradlebuild/buildutils/tasks/AbstractVersionsUpdateTask.kt
+index bd12704860e..f4082e60774 100644
+--- a/build-logic/build-update-utils/src/main/kotlin/gradlebuild/buildutils/tasks/AbstractVersionsUpdateTask.kt
++++ b/build-logic/build-update-utils/src/main/kotlin/gradlebuild/buildutils/tasks/AbstractVersionsUpdateTask.kt
+@@ -69,8 +69,10 @@ abstract class AbstractVersionsUpdateTask : DefaultTask() {
+             setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+             isExpandEntityReferences = false
+             setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+-            setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+-            setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
++            // bootstrap: values of XMLConstants.ACCESS_EXTERNAL_DTD / ACCESS_EXTERNAL_SCHEMA; built by Gradle 9.0, the
++            // Gradle API classpath has the old javax.xml.XMLConstants of xml-apis 1.4.01 (without them)
++            setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
++            setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+         }.newDocumentBuilder()
+             .parse(url)
+             .getElementsByTagName("version").let { versions ->
+-- 
+2.43.0
+

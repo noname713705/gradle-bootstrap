@@ -1,0 +1,160 @@
+From b9ec9df33a569181a0c43c3d4a8553e4fa3a09a8 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Thu, 15 Oct 2026 02:14:14 +0200
+Subject: [PATCH] Rebuild Gradle 7.0 from its original build files (bootstrap
+ fixes)
+
+Built by a minimal bootstrap of 7.0 (scripts/GradleMinimalBootstrap70.java,
+compiled without Gradle). Changes, all marked "bootstrap:":
+- bintray repositories removed (gone, requests hang until they time out)
+- Maven Central first (repo.gradle.org/gradle/libs does not mirror it anymore)
+- repo.gradle.org libs-releases with metadataSources { mavenPom(); artifact() }:
+  pmaven-common and pmaven-groovy 0.8-20100325 are there without their pom
+- http-builder 0.7.2 (on no repository anymore) -> 0.7.1
+- org.samba.jcifs:jcifs -> jcifs:jcifs (same version)
+- JDK 11 toolchain without the ADOPTOPENJDK vendor (AdoptOpenJDK builds are
+  gone, Temurin reports "Eclipse Adoptium")
+
+Run (JDK 11): IGNORE_MIRROR=true gradle --dependency-verification lenient
+  -Porg.gradle.java.installations.auto-download=false
+  install -Pgradle_installPath=build/distributions/rebuilt-minimal
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../gradlebuild.repositories.gradle.kts       | 25 ++++++++++---------
+ build-logic/build-platform/build.gradle.kts   |  3 ++-
+ .../extension/ExternalModulesExtension.kt     |  3 ++-
+ ...radlebuild.unittest-and-compile.gradle.kts |  4 ++-
+ build-logic/settings.gradle.kts               | 22 +++++-----------
+ 5 files changed, 26 insertions(+), 31 deletions(-)
+
+diff --git a/build-logic/basics/src/main/kotlin/gradlebuild.repositories.gradle.kts b/build-logic/basics/src/main/kotlin/gradlebuild.repositories.gradle.kts
+index 44643d1839b..fd19197e097 100644
+--- a/build-logic/basics/src/main/kotlin/gradlebuild.repositories.gradle.kts
++++ b/build-logic/basics/src/main/kotlin/gradlebuild.repositories.gradle.kts
+@@ -15,20 +15,21 @@
+  */
+ 
+ repositories {
++    // bootstrap: repo.gradle.org/gradle/libs does not mirror Maven Central anymore: Maven Central first
++    mavenCentral()
++    // bootstrap: some modules on repo.gradle.org lost their pom (pmaven 0.8-20100325): jar without metadata allowed
+     maven {
+-        name = "Gradle libs"
+-        url = uri("https://repo.gradle.org/gradle/libs")
+-    }
+-    maven {
+-        name = "kotlinx"
+-        url = uri("https://kotlin.bintray.com/kotlinx/")
++        url = uri("https://repo.gradle.org/gradle/libs-releases")
++        metadataSources {
++            mavenPom()
++            artifact()
++        }
+     }
+     maven {
+-        name = "kotlin-dev"
+-        url = uri("https://dl.bintray.com/kotlin/kotlin-dev")
+-    }
+-    maven {
+-        name = "kotlin-eap"
+-        url = uri("https://dl.bintray.com/kotlin/kotlin-eap")
++        name = "Gradle libs"
++        url = uri("https://repo.gradle.org/gradle/libs")
+     }
++    // bootstrap: bintray is gone (requests hang until they time out): kotlinx https://kotlin.bintray.com/kotlinx/ removed
++    // bootstrap: bintray is gone (requests hang until they time out): kotlin-dev https://dl.bintray.com/kotlin/kotlin-dev removed
++    // bootstrap: bintray is gone (requests hang until they time out): kotlin-eap https://dl.bintray.com/kotlin/kotlin-eap removed
+ }
+diff --git a/build-logic/build-platform/build.gradle.kts b/build-logic/build-platform/build.gradle.kts
+index 3d9a1db76d8..70a789d26a0 100644
+--- a/build-logic/build-platform/build.gradle.kts
++++ b/build-logic/build-platform/build.gradle.kts
+@@ -55,7 +55,8 @@ dependencies {
+         api("org.asciidoctor:asciidoctorj-pdf:1.5.4")
+         api("com.beust:jcommander:1.78")
+         api("org.codehaus.groovy:$groovyVersion")
+-        api("org.codehaus.groovy.modules.http-builder:http-builder:0.7.2")
++        // bootstrap: http-builder 0.7.2 is on no repository anymore, no newer version exists: 0.7.1 (Maven Central)
++        api("org.codehaus.groovy.modules.http-builder:http-builder:0.7.1")
+         api("org.codenarc:CodeNarc:2.0.0")
+         api("org.eclipse.jgit:org.eclipse.jgit:5.7.0.202003110725-r")
+         api("org.javassist:javassist:3.27.0-GA")
+diff --git a/build-logic/dependency-modules/src/main/kotlin/gradlebuild/modules/extension/ExternalModulesExtension.kt b/build-logic/dependency-modules/src/main/kotlin/gradlebuild/modules/extension/ExternalModulesExtension.kt
+index a357cd28c0c..20dad06238d 100644
+--- a/build-logic/dependency-modules/src/main/kotlin/gradlebuild/modules/extension/ExternalModulesExtension.kt
++++ b/build-logic/dependency-modules/src/main/kotlin/gradlebuild/modules/extension/ExternalModulesExtension.kt
+@@ -82,7 +82,8 @@ abstract class ExternalModulesExtension {
+     val jatl = "com.googlecode.jatl:jatl"
+     val jaxbCore = "com.sun.xml.bind:jaxb-core"
+     val jaxbImpl = "com.sun.xml.bind:jaxb-impl"
+-    val jcifs = "org.samba.jcifs:jcifs"
++    // bootstrap: org.samba.jcifs:jcifs is not on Maven Central anymore: jcifs:jcifs (same version)
++    val jcifs = "jcifs:jcifs"
+     val jclToSlf4j = "org.slf4j:jcl-over-slf4j"
+     val jcommander = "com.beust:jcommander"
+     val jetbrainsAnnotations = "org.jetbrains:annotations"
+diff --git a/build-logic/jvm/src/main/kotlin/gradlebuild.unittest-and-compile.gradle.kts b/build-logic/jvm/src/main/kotlin/gradlebuild.unittest-and-compile.gradle.kts
+index 9aa3ee1dd3a..70465ca7066 100644
+--- a/build-logic/jvm/src/main/kotlin/gradlebuild.unittest-and-compile.gradle.kts
++++ b/build-logic/jvm/src/main/kotlin/gradlebuild.unittest-and-compile.gradle.kts
+@@ -47,7 +47,9 @@ tasks.registerCITestDistributionLifecycleTasks()
+ fun configureCompile() {
+     java.toolchain {
+         languageVersion.set(JavaLanguageVersion.of(11))
+-        vendor.set(JvmVendorSpec.ADOPTOPENJDK)
++        // bootstrap: any JDK 11 (AdoptOpenJDK builds are gone, Temurin reports "Eclipse Adoptium", which Gradle 7.0
++        // does not match with ADOPTOPENJDK; provisioning one hung in Gradle 7.0's tar extraction)
++        // vendor.set(JvmVendorSpec.ADOPTOPENJDK)
+     }
+ 
+     tasks.withType<JavaCompile>().configureEach {
+diff --git a/build-logic/settings.gradle.kts b/build-logic/settings.gradle.kts
+index 26b24673cd8..6af4fc24243 100644
+--- a/build-logic/settings.gradle.kts
++++ b/build-logic/settings.gradle.kts
+@@ -16,16 +16,15 @@
+ 
+ pluginManagement {
+     repositories {
+-        maven {
+-            name = "kotlin-eap"
+-            url = uri("https://dl.bintray.com/kotlin/kotlin-eap")
+-        }
++        // bootstrap: bintray is gone (requests hang until they time out): kotlin-eap https://dl.bintray.com/kotlin/kotlin-eap removed
+         gradlePluginPortal()
+     }
+ }
+ 
+ dependencyResolutionManagement {
+     repositories {
++        // bootstrap: repo.gradle.org/gradle/libs does not mirror Maven Central anymore: Maven Central first
++        mavenCentral()
+         maven {
+             name = "Gradle libs"
+             url = uri("https://repo.gradle.org/gradle/libs")
+@@ -43,18 +42,9 @@ dependencyResolutionManagement {
+                 excludeModule("com.google.j2objc", "j2objc-annotations")
+             }
+         }
+-        maven {
+-            name = "kotlinx"
+-            url = uri("https://dl.bintray.com/kotlin/kotlinx")
+-        }
+-        maven {
+-            name = "kotlin-dev"
+-            url = uri("https://dl.bintray.com/kotlin/kotlin-dev")
+-        }
+-        maven {
+-            name = "kotlin-eap"
+-            url = uri("https://dl.bintray.com/kotlin/kotlin-eap")
+-        }
++        // bootstrap: bintray is gone (requests hang until they time out): kotlinx https://dl.bintray.com/kotlin/kotlinx removed
++        // bootstrap: bintray is gone (requests hang until they time out): kotlin-dev https://dl.bintray.com/kotlin/kotlin-dev removed
++        // bootstrap: bintray is gone (requests hang until they time out): kotlin-eap https://dl.bintray.com/kotlin/kotlin-eap removed
+         maven {
+             name = "ge-release-candidates"
+             url = uri("https://repo.gradle.org/gradle/enterprise-libs-release-candidates-local")
+-- 
+2.43.0
+

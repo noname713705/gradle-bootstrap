@@ -1,0 +1,35 @@
+From e503af8a91496ae8e2739010591afe64e73b4c35 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Fri, 16 Oct 2026 01:07:36 +0200
+Subject: [PATCH] Rebuild Gradle 8.10 from its original build files (download
+ fix only)
+
+Built by a minimal bootstrap of 8.10 (scripts/GradleMinimalBootstrap810.java,
+compiled without Gradle). Fix, marked "bootstrap:":
+- http-builder 0.7.2 (on no repository anymore) -> 0.7.1
+
+Run (JDK 11): IGNORE_MIRROR=true gradle -Porg.gradle.java.installations.auto-download=false
+  install -Pgradle_installPath=build/distributions/rebuilt-minimal
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build-logic-commons/build-platform/build.gradle.kts | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/build-logic-commons/build-platform/build.gradle.kts b/build-logic-commons/build-platform/build.gradle.kts
+index 176fd22f6dc..d2cfe388076 100644
+--- a/build-logic-commons/build-platform/build.gradle.kts
++++ b/build-logic-commons/build-platform/build.gradle.kts
+@@ -76,7 +76,8 @@ dependencies {
+         }
+         api("com.beust:jcommander:1.78")
+         api("org.codehaus.groovy:$groovyVersion")
+-        api("org.codehaus.groovy.modules.http-builder:http-builder:0.7.2") // TODO maybe change group name when upgrading to Groovy 4
++        api("org.codehaus.groovy.modules.http-builder:http-builder:0.7.1") // bootstrap: 0.7.2 is on no repository anymore, no newer version exists: 0.7.1 (Maven Central)
++        // TODO maybe change group name when upgrading to Groovy 4
+         api("org.codenarc:CodeNarc:$codenarcVersion")
+         api("org.eclipse.jgit:org.eclipse.jgit:5.13.3.202401111512-r")
+         api("org.javassist:javassist:3.27.0-GA")
+-- 
+2.43.0
+

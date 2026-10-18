@@ -1,0 +1,348 @@
+From 3aa8e1232d04cb876180a0cdcc471014fdcb9192 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Tue, 13 Oct 2026 00:18:39 +0200
+Subject: [PATCH] Build REL-0.5 with gradle-0.4
+
+- deps from Maven Central (groups, addMavenRepo, svnkit 1.3.5), ivy 2.0.0-rc2 kept
+- Maven URL https without trailing slash (DependencyManager.java)
+- build scripts adapted to the 0.4 builder: BootstrapUtil -> GradleUtil, addConfiguration with
+  an ivy Configuration, dependency(['runtime'], ...) {}, init.doFirst {task, graph} instead of
+  build.taskGraph.whenReady, no groovyOptions
+- maven-ant-tasks: exclude ant (ant:ant:1.6.2 breaks Ant 1.7.0)
+- tests disabled, buildSrc VersionTest removed
+- builder started with only BootstrapMain on java.class.path (see TODO.adoc)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build.gradle                                  |  94 ++++++------
+ buildSrc/build.gradle                         |  10 +-
+ .../gradle/build/release/VersionTest.groovy   | 134 ------------------
+ .../org/gradle/api/DependencyManager.java     |   2 +-
+ 4 files changed, 58 insertions(+), 182 deletions(-)
+ delete mode 100644 buildSrc/src/test/groovy/org/gradle/build/release/VersionTest.groovy
+
+diff --git a/build.gradle b/build.gradle
+index 2d8b226a116..8dfcc0a24b6 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -49,68 +49,72 @@ libDir = new File(rootDir, 'lib')
+ dependencies {
+     addFlatDirResolver('lib', libDir)
+     // todo: Improve dependency handling for xUnit jars
+-    addConfiguration('distLib') {
+-        visible = false
+-        extendsFrom 'default'
+-    }
++    // gradle-0.4 builder: addConfiguration takes an ivy Configuration (no closure)
++    addConfiguration(new org.apache.ivy.core.module.descriptor.Configuration('distLib',
++            org.apache.ivy.core.module.descriptor.Configuration.Visibility.PRIVATE, null, ['default'] as String[], true, null))
+     addConfiguration('ftpAntTask')
+     addConfiguration('retrotranslatorAntTask')
+ 
+-    clientModule(['ftpAntTask'], ":ant-commons-net:1.7.0") {
+-        clientModule(":commons-net:1.4.1") {
+-            dependencies(":oro:2.0.8@jar")
++    clientModule(['ftpAntTask'], "org.apache.ant:ant-commons-net:1.7.0") {
++        clientModule("commons-net:commons-net:1.4.1") {
++            dependencies("oro:oro:2.0.8@jar")
+         }
+     }
+ 
+-    retrotranslatorAntTask ':retrotranslator-runtime:1.2.7', ':retrotranslator-transformer:1.2.7', ':backport-util-concurrent:3.1'
++    retrotranslatorAntTask 'net.sf.retrotranslator:retrotranslator-runtime:1.2.7', 'net.sf.retrotranslator:retrotranslator-transformer:1.2.7', 'backport-util-concurrent:backport-util-concurrent:3.1'
+ 
+-    clientModule(['groovy'], ":groovy-all:1.5.6") {
+-        clientModule(":ant:1.7.0") {
+-            dependencies(":ant-junit:1.7.0@jar", ":ant-launcher:1.7.0")
++    clientModule(['groovy'], "org.codehaus.groovy:groovy-all:1.5.6") {
++        clientModule("org.apache.ant:ant:1.7.0") {
++            dependencies("org.apache.ant:ant-junit:1.7.0@jar", "org.apache.ant:ant-launcher:1.7.0")
+         }
+     }
+ 
+-    clientModule(['compile'], ":commons-httpclient:3.0") {
+-        dependencies(":commons-codec:1.2", ":jcl-over-slf4j:1.5.3")
++    clientModule(['compile'], "commons-httpclient:commons-httpclient:3.0") {
++        dependencies("commons-codec:commons-codec:1.2", "org.slf4j:jcl-over-slf4j:1.5.3")
+     }
+ 
+     // Needed by the eclipse plugin
+-    clientModule(['compile'], ":dom4j:1.6.1") {
+-        dependencies(":jaxen:1.1@jar")
++    clientModule(['compile'], "dom4j:dom4j:1.6.1") {
++        dependencies("jaxen:jaxen:1.1@jar")
+     }
+ 
+-    runtime(":ant-junit:1.7.0") {
++    // gradle-0.4 builder: no configuration shorthand with a closure
++    dependency(['runtime'], "org.apache.ant:ant-junit:1.7.0") {
+         exclude(module: 'junit')
+     }
+ 
+-    clientModule(['compile'], ":jetty:6.1.14") {
+-        dependencies(":servlet-api:2.5", ":jetty-naming:6.1.14")
++    clientModule(['compile'], "org.mortbay.jetty:jetty:6.1.14") {
++        dependencies("javax.servlet:servlet-api:2.5", "org.mortbay.jetty:jetty-naming:6.1.14")
++    }
++    compile "org.mortbay.jetty:jetty-plus:6.1.14", "org.mortbay.jetty:jetty-util:6.1.14", "javax.servlet:servlet-api:2.5"
++
++    compile "net.sf.jopt-simple:jopt-simple:2.4.1",
++            "org.apache.ant:ant:1.7.0",
++            "ch.qos.logback:logback-classic:0.9.9",
++            "org.slf4j:slf4j-api:1.5.3",
++            "ch.qos.logback:logback-core:0.9.9",
++            "commons-io:commons-io:1.4@jar",
++            "commons-lang:commons-lang:2.3@jar",
++            "slide:webdavlib:2.0",
++            "biz.aQute:bndlib:0.0.255@jar",
++            "org.apache.ivy:ivy:2.0.0-rc2@jar"
++    // maven-ant-tasks 2.0.9 pulls ant:ant:1.6.2 (old group), next to org.apache.ant:ant:1.7.0 it breaks Ant
++    dependency(['compile'], "org.apache.maven:maven-ant-tasks:2.0.9") {
++        exclude(module: 'ant')
+     }
+-    compile ":jetty-plus:6.1.14", ":jetty-util:6.1.14", ":servlet-api:2.5"
+-
+-    compile ":jopt-simple:2.4.1",
+-            ":ant:1.7.0",
+-            ":logback-classic:0.9.9",
+-            ":slf4j-api:1.5.3",
+-            ":logback-core:0.9.9",
+-            ":commons-io:1.4@jar",
+-            ":commons-lang:2.3@jar",
+-            ":webdavlib:2.0",
+-            ":bndlib:0.0.255@jar",
+-            ":ivy:2.0.0-rc2@jar",
+-            ":maven-ant-tasks:2.0.9"
+     
+-    runtime ":ant-launcher:1.7.0",
+-            ":ant-nodeps:1.7.0",
+-            ":ant-trax:1.7.0",
+-            ":junit:4.4"
+-
+-    def FIRST_LEVEL_JMOCK = [':hamcrest-core:1.1', ':hamcrest-library:1.1', ':jmock-junit4:2.4.0']
+-    testCompile ":junit:4.4", FIRST_LEVEL_JMOCK
+-    clientModule(['testCompile'], ":jmock:2.4.0") {
+-        dependencies(':jmock-legacy:2.4.0', ':objenesis:1.0', ':cglib-nodep:2.1_3', FIRST_LEVEL_JMOCK)
++    runtime "org.apache.ant:ant-launcher:1.7.0",
++            "org.apache.ant:ant-nodeps:1.7.0",
++            "org.apache.ant:ant-trax:1.7.0",
++            "junit:junit:4.4"
++
++    def FIRST_LEVEL_JMOCK = ['org.hamcrest:hamcrest-core:1.1', 'org.hamcrest:hamcrest-library:1.1', 'org.jmock:jmock-junit4:2.4.0']
++    testCompile "junit:junit:4.4", FIRST_LEVEL_JMOCK
++    clientModule(['testCompile'], "org.jmock:jmock:2.4.0") {
++        dependencies('org.jmock:jmock-legacy:2.4.0', 'org.objenesis:objenesis:1.0', 'cglib:cglib-nodep:2.1_3', FIRST_LEVEL_JMOCK)
+     }
+-    distLib ":junit:4.4"
++    distLib "junit:junit:4.4"
++    addMavenRepo()
+ }
+ 
+ distributionUploadUrl = null
+@@ -118,7 +122,8 @@ userguideRemoteDirRoot = 'userguide/'
+ userguideRemoteDir = ''
+ javadocRemoteDirRoot = 'api/'
+ javadocRemoteDir = ''
+-build.taskGraph.whenReady {graph ->
++// gradle-0.4 builder: no build.taskGraph, init.doFirst gets the task graph (dag) as 2nd argument
++init.doFirst {task, graph ->
+     if (graph.hasTask(':release')) {
+         versionModifier = ''
+         distributionUploadUrl = 'https://dav.codehaus.org/dist/gradle'
+@@ -146,10 +151,13 @@ resources.doLast {
+     versionProperties.store(new FileOutputStream(new File(classesDir, GradleVersion.FILE_NAME)), '')
+ }
+ 
+-[compile, testCompile]*.groovyOptions*.fork(memoryInitialSize: '128M', memoryMaximumSize: '1G')
++// gradle-0.4 builder has no groovyOptions (fork with more memory for groovyc)
++// [compile, testCompile]*.groovyOptions*.fork(memoryInitialSize: '128M', memoryMaximumSize: '1G')
+ 
+ 
+ test {
++    // tests disabled for the bootstrap (see README)
++    exclude '**'
+     // We set forkmode to ONCE as our tests are written in Groovy and the startup time of Groovy is significant.
+     options.fork(forkMode: ForkMode.ONCE, jvmArgs: ["-ea", "-Dgradle.home=roadToNowhere", '-Xms128m', '-Xmx1g'])
+ }
+diff --git a/buildSrc/build.gradle b/buildSrc/build.gradle
+index 17bd1a58e79..78e315db5a2 100644
+--- a/buildSrc/build.gradle
++++ b/buildSrc/build.gradle
+@@ -7,15 +7,17 @@ usePlugin('groovy')
+ 
+ dependencies {
+     addFlatDirResolver('lib', new File(rootDir, 'lib'), new File(rootDir.parentFile, 'lib'))
+-    compile ":svnkit:1.1.6", ":svnkit-javahl:1.1.6", ":xmlunit:1.2", ':hamcrest-core:1.1', ':hamcrest-library:1.1'
++    compile "org.tmatesoft.svnkit:svnkit:1.3.5", "org.tmatesoft.svnkit:svnkit-javahl:1.3.5", "xmlunit:xmlunit:1.2", 'org.hamcrest:hamcrest-core:1.1', 'org.hamcrest:hamcrest-library:1.1'
++    addMavenRepo()
+ }
+ 
+ sourceCompatibility = 1.5
+ targetCompatibility = 1.5
++// gradle-0.4 builder: BootstrapUtil (0.5) is GradleUtil in 0.4
+ // todo Actually it should be only groovy, but without junit we get a strange error. We need to understand this.
+-compile.groovyClasspath = org.gradle.util.BootstrapUtil.groovyFiles
+-testCompile.groovyClasspath = org.gradle.util.BootstrapUtil.groovyFiles
+-compile.unmanagedClasspath(org.gradle.util.BootstrapUtil.gradleClasspath as File[])
++compile.groovyClasspath = org.gradle.util.GradleUtil.groovyFiles
++testCompile.groovyClasspath = org.gradle.util.GradleUtil.groovyFiles
++compile.unmanagedClasspath(org.gradle.util.GradleUtil.gradleClasspath as File[])
+ test {
+     include '**/*Test.class'
+     exclude '**/Abstract*'
+diff --git a/buildSrc/src/test/groovy/org/gradle/build/release/VersionTest.groovy b/buildSrc/src/test/groovy/org/gradle/build/release/VersionTest.groovy
+deleted file mode 100644
+index 9ed6696284d..00000000000
+--- a/buildSrc/src/test/groovy/org/gradle/build/release/VersionTest.groovy
++++ /dev/null
+@@ -1,134 +0,0 @@
+-/*
+- * Copyright 2007 the original author or authors.
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-package org.gradle.build.release
+-
+-import org.gradle.api.internal.dependencies.DefaultDependencyManagerFactory
+-import org.gradle.api.internal.project.*
+-import org.gradle.groovy.scripts.EmptyScript
+-import org.gradle.util.GradleUtil
+-import org.gradle.groovy.scripts.StringScriptSource
+-import org.gradle.logging.AntLoggingAdapter
+-import org.gradle.StartParameter
+-import org.gradle.invocation.DefaultBuild
+-import org.gradle.initialization.ISettingsFinder
+-import org.gradle.CacheUsage
+-
+-/**
+- * @author Hans Dockter
+- */
+-class VersionTest extends GroovyTestCase {
+-    Version version
+-    boolean trunk
+-    DefaultProject project
+-    Svn svn
+-    File testDir
+-
+-    void setUp() {
+-        testDir = GradleUtil.makeNewDir(new File('tmpTest'))
+-        File rootDir = new File(testDir, 'root')
+-        rootDir.mkdir()
+-        project = createRootProject(rootDir);
+-        project.previousMajor = '1'
+-        project.previousMinor = '2'
+-        project.previousRevision = '3'
+-        svn = [isTrunk: {trunk}] as Svn
+-        version = new Version(svn, project, false)
+-    }
+-
+-    DefaultProject createRootProject(File rootDir) {
+-        ISettingsFinder settingsFinder = [getSettingsDir: { new File('root') }] as ISettingsFinder
+-        IProjectFactory projectFactory = new ProjectFactory(
+-                new TaskFactory(),
+-                new DefaultDependencyManagerFactory(settingsFinder, CacheUsage.ON),
+-                new BuildScriptProcessor(),
+-                new PluginRegistry(),
+-                new StartParameter(),
+-                new StringScriptSource("embedded build file", "embedded"),
+-                new DefaultAntBuilderFactory(new AntLoggingAdapter()))
+-
+-        DefaultProject project = projectFactory.createProject(rootDir.name, null, rootDir, new DefaultBuild(null, null))
+-        project.setBuildScript(new EmptyScript())
+-        return project;
+-    }
+-
+-    void tearDown() {
+-        GradleUtil.deleteDir(testDir)
+-    }
+-
+-    void testFalseTrunkMinor() {
+-        trunk = true
+-        assertEquals(1, version.major)
+-        assertEquals(3, version.minor)
+-        assertEquals(0, version.revision)
+-    }
+-
+-    void testTrueTrunkMinor() {
+-        trunk = false
+-        assertEquals(1, version.major)
+-        assertEquals(2, version.minor)
+-        assertEquals(4, version.revision)
+-    }
+-
+-    void testFalseTrunkMajor() {
+-        version = new Version(svn, project, true)
+-        trunk = true
+-        assertEquals(2, version.major)
+-        assertEquals(0, version.minor)
+-        assertEquals(0, version.revision)
+-    }
+-
+-    void testTrueTrunkMajor() {
+-        version = new Version(svn, project, true)
+-        trunk = false
+-        assertEquals(1, version.major)
+-        assertEquals(2, version.minor)
+-        assertEquals(4, version.revision)
+-    }
+-
+-    void testGetLastRelease() {
+-        assertEquals('1.2.3', version.lastRelease)
+-        project.previousRevision = 0
+-        version = new Version(svn, project, false)
+-        assertEquals('1.2', version.lastRelease)
+-    }
+-
+-    void testToString() {
+-        trunk = false
+-        project.versionModifier = ''
+-        assertEquals("1.2.4", version.toString())
+-        project.versionModifier = 'a'
+-        assertEquals("1.2.4-a", version.toString())
+-
+-        trunk = true
+-        project.versionModifier = ''
+-        assertEquals("1.3", version.toString())
+-        project.versionModifier = 'a'
+-        assertEquals("1.3-a", version.toString())
+-    }
+-
+-    void testStoreCurrentVersion() {
+-        trunk = false
+-        version.storeCurrentVersion()
+-        Properties properties = new Properties()
+-        properties.load(new FileInputStream(new File(project.projectDir, 'gradle.properties')))
+-        assertEquals('1', properties.previousMajor)
+-        assertEquals('2', properties.previousMinor)
+-        assertEquals('4', properties.previousRevision)
+-    }
+-
+-
+-}
+diff --git a/src/main/groovy/org/gradle/api/DependencyManager.java b/src/main/groovy/org/gradle/api/DependencyManager.java
+index 0d0ded21031..40d74ff50cb 100644
+--- a/src/main/groovy/org/gradle/api/DependencyManager.java
++++ b/src/main/groovy/org/gradle/api/DependencyManager.java
+@@ -71,7 +71,7 @@ public interface DependencyManager extends DependencyContainer {
+ 
+     public static final String DEFAULT_ARTIFACT_PATTERN = "/[artifact]-[revision](-[classifier]).[ext]";
+ 
+-    public static final String MAVEN_REPO_URL = "http://repo1.maven.org/maven2/";
++    public static final String MAVEN_REPO_URL = "https://repo1.maven.org/maven2";
+ 
+     public static final String BUILD_RESOLVER_NAME = "build-resolver";
+ 
+-- 
+2.43.0
+

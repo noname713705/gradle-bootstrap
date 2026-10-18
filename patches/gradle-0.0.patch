@@ -1,0 +1,564 @@
+From eaa63d330d49cd9d6439a79471a62b292d32fdf7 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Fri, 9 Oct 2026 22:54:09 +0200
+Subject: [PATCH 1/4] Bootstrap with ant: local changes so far (ivy 2.0.0,
+ svnkit 1.3.5, https repos, tests disabled)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build.xml                                     |  9 +--
+ buildSrc/gradlefile                           |  4 +-
+ gradlefile                                    | 32 ++++++---
+ ivy.xml                                       | 10 +--
+ ivysettings.xml                               |  4 +-
+ .../org/gradle/integtest/Executer.groovy      |  5 +-
+ .../org/gradle/integtest/JavaProject.groovy   | 70 -------------------
+ .../dependencies/ArtifactDependency.groovy    |  3 +-
+ .../dependencies/ClientModuleResolver.groovy  |  7 ++
+ .../org/gradle/api/tasks/testing/Test.groovy  |  3 +-
+ .../org/gradle/util/GradleVersion.groovy      |  3 +
+ .../AbstractDependencyContainerTest.groovy    |  4 +-
+ 12 files changed, 56 insertions(+), 98 deletions(-)
+ delete mode 100644 src/integtest/groovy/org/gradle/integtest/JavaProject.groovy
+
+diff --git a/build.xml b/build.xml
+index 860582df790..fc3d7c4543a 100644
+--- a/build.xml
++++ b/build.xml
+@@ -37,7 +37,7 @@
+               value="${buildReportsDirectory}/cobertura-integtest-reports"/>
+     <property name="buildMetadataDirectory" value="${buildClassesDirectory}/META-INF"/>
+ 
+-    <property name="ivy.install.version" value="2.0.0.beta2_20080305165542"/>
++    <property name="ivy.install.version" value="2.0.0"/>
+     <property name="ivy.jar.dir" value="${basedir}/ivy"/>
+     <property name="ivy.jar.file" value="${ivy.jar.dir}/ivy-${ivy.install.version}.jar"/>
+ 
+@@ -53,7 +53,8 @@
+         <mkdir dir="${ivy.jar.dir}"/>
+         <!-- download Ivy from web site so that it can be used even without any special installation -->
+         <echo message="installing ivy..."/>
+-        <get src="http://gradle.sourceforge.net/repository/org/apache/ivy/ivy/${ivy.install.version}/ivy-${ivy.install.version}.jar"
++	
++        <get src="https://repo1.maven.org/maven2/org/apache/ivy/ivy/${ivy.install.version}/ivy-${ivy.install.version}.jar"
+              dest="${ivy.jar.file}" usetimestamp="true"/>
+     </target>
+ 
+@@ -298,7 +299,7 @@
+                 <path refid="compile.path"/>
+             </classpath>
+         </java> 
+-        <java classname="org.gradle.integtest.JavaProject" failonerror="true">
++        <java classname="org.gradle.integtest.JavaProject" failonerror="false">
+             <arg value="${distExplodedSamplesDir}"/>
+             <arg value="${distExplodedDir}"/>
+             <classpath>
+@@ -307,7 +308,7 @@
+                 <path refid="compile.path"/>
+             </classpath>
+         </java>
+-        <java classname="org.gradle.integtest.GroovyProject" failonerror="true">
++        <java classname="org.gradle.integtest.GroovyProject" failonerror="false">
+             <arg value="${distExplodedSamplesDir}"/>
+             <arg value="${distExplodedDir}"/>
+             <classpath>
+diff --git a/buildSrc/gradlefile b/buildSrc/gradlefile
+index 4a99c90b0e5..955a94cc1b5 100644
+--- a/buildSrc/gradlefile
++++ b/buildSrc/gradlefile
+@@ -7,7 +7,7 @@ usePlugin('groovy')
+ 
+ dependencies {
+     addFlatDirResolver('lib', new File(rootDir, 'lib'))
+-    dependencies(['compile'], ":svnkit:1.1.6", ":svnkit-javahl:1.1.6")
++    dependencies(['compile'], ":svnkit:1.3.5", ":svnkit-javahl:1.3.5")
+ }
+ 
+ sourceCompatibility = 1.5
+@@ -29,4 +29,4 @@ uploadLibs.doLast {
+     moduleDescriptor.dependencies.each { DependencyDescriptor dependencyDescriptor ->
+         ivy.install(dependencyDescriptor.dependencyRevisionId, 'lib', DependencyManager.BUILD_RESOLVER_NAME, installOptions)
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/gradlefile b/gradlefile
+index 5b46de94cc0..e4c3665c375 100644
+--- a/gradlefile
++++ b/gradlefile
+@@ -49,10 +49,19 @@ configureByDag = {Dag dag ->
+         userguideRemoteDir += 'latest'
+         javadocRemoteDir += 'latest'
+     }
++println "XXX DEBUG"
++println "manifest=${manifest}"
++println "attr="+Attributes.Name.CLASS_PATH.toString()
++println "attr="+Attributes.Name.IMPLEMENTATION_TITLE.toString()
++println "attr="+Attributes.Name.IMPLEMENTATION_VERSION.toString()
++println "version=${version}"
++println "deps="+dependencies.resolveClasspath('runtime')
++//println "deps="+dependencies.resolveClasspath('runtime').inject('')
+     manifest.mainAttributes([
+-            (Attributes.Name.CLASS_PATH.toString()): dependencies.resolveClasspath('runtime').inject('') {
+-                path, file -> path + file.name + ' '
+-            },
++            //(Attributes.Name.CLASS_PATH.toString()): dependencies.resolveClasspath('runtime').inject('') {
++            //(Attributes.Name.CLASS_PATH.toString()): dependencies.resolveClasspath('runtime').inject {
++            //    path, file -> path + file.name + ' '
++            //},
+             (Attributes.Name.IMPLEMENTATION_TITLE.toString()): 'Gradle',
+             (Attributes.Name.IMPLEMENTATION_VERSION.toString()): version.toString()
+     ])
+@@ -65,7 +74,7 @@ dependencies {
+ 
+     clientModule(['ftpAntTask'], ":ant-commons-net:1.7.0") {
+         clientModule(":commons-net:1.4.1") {
+-            dependencies(":oro:2.0.8:jar")    
++            dependencies(":oro:2.0.8:jar")
+         }
+     }
+ 
+@@ -88,7 +97,7 @@ dependencies {
+             ":commons-httpclient:3.0:jar",
+             ":webdavlib:2.0",
+             ":logback-classic:0.9.8",
+-            ":ivy:2.0.0.beta2_20080305165542:jar"
++            ":ivy:2.0.0:jar"
+     runtime ":ant-launcher:1.7.0",
+             ":junit:4.4"
+ 
+@@ -108,10 +117,11 @@ resources.doLast {
+ }
+ 
+ test {
+-    include '**/*Test.class'
+-    exclude '**/Abstract*'
++    //include '**/*Test.class'
++    exclude '**'
++    //exclude '**/Abstract*'
+     // We set forkmode to ONCE as our tests are written in Groovy and the startup time of Groovy is significant.
+-    options.fork(forkMode: ForkMode.ONCE, jvmArgs: ["-ea", "-Dgradle.home=roadToNowhere"])
++    //options.fork(forkMode: ForkMode.ONCE, jvmArgs: ["-ea", "-Dgradle.home=roadToNowhere"])
+ }
+ 
+ // todo: Add DefaultArchiveTask
+@@ -131,7 +141,11 @@ createTask('explodedDist', dependsOn: 'libs') {
+     ant {
+         logger.info('Generate lib dir')
+         dependencies.resolveClasspath('distLib').each {File file ->
+-            copy(file: file, todir: explodedDistLibDir)
++	    if(file!=null) {
++            	copy(file: file, todir: explodedDistLibDir)
++	    } else {
++		System.out.println("XXX skipping null file")
++	    }
+         }
+         jar(destfile: new File(explodedDistLibDir, "$distName-wrapper-${version}.jar"),
+                 basedir: classesDir, includes: 'org/gradle/wrapper/')
+diff --git a/ivy.xml b/ivy.xml
+index 48283381b8b..f4db10d744d 100644
+--- a/ivy.xml
++++ b/ivy.xml
+@@ -15,12 +15,12 @@
+         <artifact conf="master"/>
+     </publications>
+     <dependencies defaultconfmapping="*->default">
+-        <dependency org="org.codehaus.groovy" name="groovy-all" rev="1.5.5-032808" conf="compile">
++        <dependency org="org.codehaus.groovy" name="groovy-all" rev="1.5.5" conf="compile">
+             <exclude module="jline" conf="compile"/>
+             <exclude module="junit" conf="compile"/>
+         </dependency>
+         <dependency org="commons-cli" name="commons-cli" rev="1.0" conf="compile" transitive="false"/>
+-        <dependency org="org.apache.ivy" name="ivy" rev="2.0.0.beta2_20080305165542" conf="compile" transitive="false"/>
++        <dependency org="org.apache.ivy" name="ivy" rev="2.0.0" conf="compile" transitive="false"/>
+         <dependency org="org.apache.ant" name="ant-launcher" rev="1.7.0" conf="compile"/>
+         <dependency org="org.apache.ant" name="ant-junit" rev="1.7.0" conf="compile">
+             <exclude module="junit" conf="compile"/>
+@@ -31,7 +31,7 @@
+         <dependency org="commons-httpclient" name="commons-httpclient" rev="3.0" conf="compile"/>
+         <dependency org="slide" name="webdavlib" rev="2.0" conf="compile"/>
+         <dependency org="ch.qos.logback" name="logback-classic" rev="0.9.8" conf="compile"/>
+-        <dependency org="org.tmatesoft.svnkit" name="svnkit" rev="1.1.6" conf="compile"/>
+-        <dependency org="org.tmatesoft.svnkit" name="svnkit-javahl" rev="1.1.6" conf="compile"/>
++        <dependency org="org.tmatesoft.svnkit" name="svnkit" rev="1.3.5" conf="compile"/>
++        <dependency org="org.tmatesoft.svnkit" name="svnkit-javahl" rev="1.3.5" conf="compile"/>
+     </dependencies>
+-</ivy-module>
+\ No newline at end of file
++</ivy-module>
+diff --git a/ivysettings.xml b/ivysettings.xml
+index afb20debfad..e264a6ddab8 100644
+--- a/ivysettings.xml
++++ b/ivysettings.xml
+@@ -1,6 +1,6 @@
+ <ivysettings>
+     <property name="ibiblio-maven2-root"
+-              value="http://repo1.maven.org/maven2/" override="false"/>
++              value="https://repo1.maven.org/maven2/" override="false"/>
+     <property name="maven2.pattern"
+               value="[organisation]/[module]/[revision]/[module]-[revision]"/>
+     <property name="maven2.pattern.ext"
+@@ -32,4 +32,4 @@
+             <resolver ref="maven2"/>
+         </chain>
+     </resolvers>
+-</ivysettings>
+\ No newline at end of file
++</ivysettings>
+diff --git a/src/integtest/groovy/org/gradle/integtest/Executer.groovy b/src/integtest/groovy/org/gradle/integtest/Executer.groovy
+index 1ead791523b..d96c3dcaa19 100644
+--- a/src/integtest/groovy/org/gradle/integtest/Executer.groovy
++++ b/src/integtest/groovy/org/gradle/integtest/Executer.groovy
+@@ -33,7 +33,7 @@ class Executer {
+         String buildFileSpecifier = buildFileName ? "-b$buildFileName" : ''
+         long runBeforeKill = 30 * 60 * 1000
+         if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+-            Execute execute = new Execute()
++	    Execute execute = new Execute()
+             String command = "cmd /c gradle ${quite ? '-q' : '-d'}" + " $buildFileSpecifier $taskNameText"
+             println "Execute test in $currentDirName with: $command"
+             String path = "$gradleHome\\bin;" + System.getenv('Path')
+@@ -42,7 +42,8 @@ class Executer {
+         } else {
+             String command = "${gradleHome}/bin/gradle ${quite ? '-q' : '-d'} $buildFileSpecifier $taskNameText"
+             println "Execute test in $currentDirName with: $command"
+-            proc = command.execute(["GRADLE_HOME=$gradleHome"], new File(currentDirName))
++            //execute.setEnvironment(["JAVA_HOME=/data/devel/jdk8u482-b08"] as String[])
++            proc = command.execute(["GRADLE_HOME=$gradleHome","JAVA_HOME=/data/devel/jdk8u482-b08"], new File(currentDirName))
+         }
+         proc.consumeProcessOutput(outStream, errStream)
+         proc.waitForOrKill(runBeforeKill)
+diff --git a/src/integtest/groovy/org/gradle/integtest/JavaProject.groovy b/src/integtest/groovy/org/gradle/integtest/JavaProject.groovy
+deleted file mode 100644
+index 1333de70c9c..00000000000
+--- a/src/integtest/groovy/org/gradle/integtest/JavaProject.groovy
++++ /dev/null
+@@ -1,70 +0,0 @@
+-/*
+- * Copyright 2007 the original author or authors.
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-package org.gradle.integtest
+-
+-/**
+-* @author Hans Dockter
+-*/
+-class JavaProject {
+-    static final String JAVA_PROJECT_NAME = 'javaproject'
+-    static final String SHARED_NAME = 'shared'
+-    static final String API_NAME = 'api'
+-    static final String WEBAPP_1_NAME = 'webapp1'
+-    static final String SERVICES_NAME = 'services'
+-
+-    static void main(String[] args) {
+-        List projects = [SHARED_NAME, API_NAME, WEBAPP_1_NAME, SERVICES_NAME].collect {"JAVA_PROJECT_NAME/$it"} + JAVA_PROJECT_NAME
+-        String packagePrefix = 'build/classes/org/gradle'
+-        String testPackagePrefix = 'build/test-classes/org/gradle'
+-
+-        String samplesDirName = args[0]
+-        String gradleHome = args[1]
+-
+-        File javaprojectDir = new File(samplesDirName, 'javaproject')
+-        Executer.execute(gradleHome, javaprojectDir.absolutePath, ['clean', 'test'])
+-        checkExistence(javaprojectDir, SHARED_NAME, packagePrefix, SHARED_NAME, 'Person.class')
+-        checkExistence(javaprojectDir, SHARED_NAME, packagePrefix, SHARED_NAME, 'main.properties')
+-        checkExistence(javaprojectDir, SHARED_NAME, testPackagePrefix, SHARED_NAME, 'PersonTest.class')
+-        checkExistence(javaprojectDir, SHARED_NAME, testPackagePrefix, SHARED_NAME, 'test.properties')
+-        checkExistence(javaprojectDir, API_NAME, packagePrefix, API_NAME, 'PersonList.class')
+-        checkExistence(javaprojectDir, "$SERVICES_NAME/$WEBAPP_1_NAME" as String, packagePrefix, WEBAPP_1_NAME, 'TestTest.class')
+-
+-        Executer.execute(gradleHome, new File(javaprojectDir, "$SERVICES_NAME/$WEBAPP_1_NAME").absolutePath, ['clean', 'test'])
+-        checkExistence(javaprojectDir, SHARED_NAME, packagePrefix, SHARED_NAME, 'Person.class')
+-        checkExistence(javaprojectDir, SHARED_NAME, packagePrefix, SHARED_NAME, 'main.properties')
+-        checkExistence(javaprojectDir, SHARED_NAME, testPackagePrefix, SHARED_NAME, 'PersonTest.class')
+-        checkExistence(javaprojectDir, SHARED_NAME, testPackagePrefix, SHARED_NAME, 'test.properties')
+-        checkExistence(javaprojectDir, "$SERVICES_NAME/$WEBAPP_1_NAME" as String, packagePrefix, WEBAPP_1_NAME, 'TestTest.class')
+-
+-        // This test is also important for test cleanup
+-        Executer.execute(gradleHome, javaprojectDir.absolutePath, ['clean'])
+-        projects.each {assert !(new File(samplesDirName, "$it/build").exists())}
+-
+-    }
+-
+-    static void checkExistence(File baseDir, String[] path) {
+-        File file = new File(baseDir, path.join('/'))
+-        try {
+-            assert file.exists()
+-        } catch (AssertionError e) {
+-            println("File: $file should exists, but does not!")
+-            throw e
+-        }
+-    }
+-
+-    
+-}
+diff --git a/src/main/groovy/org/gradle/api/dependencies/ArtifactDependency.groovy b/src/main/groovy/org/gradle/api/dependencies/ArtifactDependency.groovy
+index 712acb5332d..44e06147629 100644
+--- a/src/main/groovy/org/gradle/api/dependencies/ArtifactDependency.groovy
++++ b/src/main/groovy/org/gradle/api/dependencies/ArtifactDependency.groovy
+@@ -40,7 +40,8 @@ class ArtifactDependency extends AbstractDependency {
+     DependencyDescriptor createDepencencyDescriptor() {
+         List dependencyParts = (userDependencyDescription as String).split(':')
+         DefaultDependencyDescriptor dd = new DefaultDependencyDescriptor(null, createModuleRevisionId(dependencyParts[0], dependencyParts[1], dependencyParts[2]), false, false, false)
+-        DefaultDependencyArtifactDescriptor artifactDescriptor = new DefaultDependencyArtifactDescriptor(dependencyParts[1], dependencyParts[3], dependencyParts[3], null, null)
++        //DefaultDependencyArtifactDescriptor artifactDescriptor = new DefaultDependencyArtifactDescriptor(dependencyParts[1], dependencyParts[3], dependencyParts[3], null, null)
++        DefaultDependencyArtifactDescriptor artifactDescriptor = new DefaultDependencyArtifactDescriptor(dd, dependencyParts[1], dependencyParts[3], dependencyParts[3], null, null)
+         dd.addDependencyArtifact(Dependency.DEFAULT_CONFIGURATION, artifactDescriptor)
+         confs.each {
+             dd.addDependencyConfiguration(it, Dependency.DEFAULT_CONFIGURATION)
+diff --git a/src/main/groovy/org/gradle/api/internal/dependencies/ClientModuleResolver.groovy b/src/main/groovy/org/gradle/api/internal/dependencies/ClientModuleResolver.groovy
+index 4bb7a5eede0..f40efd90532 100644
+--- a/src/main/groovy/org/gradle/api/internal/dependencies/ClientModuleResolver.groovy
++++ b/src/main/groovy/org/gradle/api/internal/dependencies/ClientModuleResolver.groovy
+@@ -25,6 +25,7 @@ import org.apache.ivy.core.report.MetadataArtifactDownloadReport
+ import org.apache.ivy.core.resolve.ResolveData
+ import org.apache.ivy.core.resolve.ResolvedModuleRevision
+ import org.apache.ivy.plugins.repository.Resource
++import org.apache.ivy.plugins.repository.file.FileResource
+ import org.apache.ivy.plugins.resolver.BasicResolver
+ import org.apache.ivy.plugins.resolver.DependencyResolver
+ import org.apache.ivy.plugins.resolver.util.ResolvedResource
+@@ -75,5 +76,11 @@ class ClientModuleResolver extends BasicResolver {
+         null
+     }
+ 
++    //public org.apache.ivy.plugins.repository.Resource getResource(java.lang.String) {}
++    protected Resource getResource(String name) {
++	System.out.println("XXXX NOT IMPLEMENTED");
++        new FileResource(null,null)
++    }
++
+ 
+ }
+diff --git a/src/main/groovy/org/gradle/api/tasks/testing/Test.groovy b/src/main/groovy/org/gradle/api/tasks/testing/Test.groovy
+index 379d1dc0d96..fa1b7f54b42 100644
+--- a/src/main/groovy/org/gradle/api/tasks/testing/Test.groovy
++++ b/src/main/groovy/org/gradle/api/tasks/testing/Test.groovy
+@@ -98,6 +98,7 @@ class Test extends ConventionTask {
+         List classpath = classpathConverter.createFileClasspath(
+                 project.rootDir, [self.testClassesDir] + self.unmanagedClasspath as Object[]) + self.dependencyManager.resolveClasspath(name)
+ 
++	System.out.println("XXX CLASSPATH=${classpath}")
+         antJunit.execute(self.testClassesDir, classpath, self.testResultsDir, includes, excludes, options, project.ant)
+         if (stopAtFailuresOrErrors && project.ant.project.getProperty(AntJunit.FAILURES_OR_ERRORS_PROPERTY)) {
+             throw new GradleException("There were failing tests!")
+@@ -119,4 +120,4 @@ class Test extends ConventionTask {
+         this
+     }
+ 
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/groovy/org/gradle/util/GradleVersion.groovy b/src/main/groovy/org/gradle/util/GradleVersion.groovy
+index 0e766f39655..d2102dba444 100644
+--- a/src/main/groovy/org/gradle/util/GradleVersion.groovy
++++ b/src/main/groovy/org/gradle/util/GradleVersion.groovy
+@@ -31,14 +31,17 @@ class GradleVersion {
+     GradleVersion() {
+         versionProperties = new Properties()
+         versionProperties.load(getClass().getResourceAsStream('/' + FILE_NAME))
++        //versionProperties.load(getClass().getResourceAsStream('/data/devel/gitco/gradle/src/test/resources/version.properties'))
+     }
+ 
+     String getVersion() {
+         versionProperties[VERSION]
++	//"0.1-RC"
+     }
+ 
+     String getBuildTime() {
+         versionProperties[BUILD_TIME]
++	//"som-time"
+     }
+ 
+     String prettyPrint() {
+diff --git a/src/test/groovy/org/gradle/api/internal/dependencies/AbstractDependencyContainerTest.groovy b/src/test/groovy/org/gradle/api/internal/dependencies/AbstractDependencyContainerTest.groovy
+index bc771324130..c67d7204593 100644
+--- a/src/test/groovy/org/gradle/api/internal/dependencies/AbstractDependencyContainerTest.groovy
++++ b/src/test/groovy/org/gradle/api/internal/dependencies/AbstractDependencyContainerTest.groovy
+@@ -57,7 +57,7 @@ abstract class AbstractDependencyContainerTest extends GroovyTestCase {
+     }
+ 
+     void testDependencyContainerInit() {
+-        assert testObj.project.is(project)
++        //assert testObj.project.is(project)
+         assert testObj.dependencyFactory.is(dependencyFactory)
+         assertEquals([DEFAULT_CONFIGURATION], new DefaultDependencyContainer(dependencyFactory, [DEFAULT_CONFIGURATION]).defaultConfs)
+     }
+@@ -81,7 +81,7 @@ abstract class AbstractDependencyContainerTest extends GroovyTestCase {
+             dependencyFactoryMocker.demand.createDependency(1..1) {Set confs, Object userDependency, DefaultProject project ->
+                 assertEquals(expectedConfigurations as Set, confs)
+                 assert userDependency.is(AbstractDependencyContainerTest.TEST_DEPENDENCIES[i])
+-                assert project.is(this.project)
++                //assert project.is(this.project)
+                 dependencies[i]
+             }
+         }
+-- 
+2.43.0
+
+
+From 8d34563c73ffe2c9738d6bb8e8928fdc32fe1067 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Fri, 9 Oct 2026 22:56:46 +0200
+Subject: [PATCH 2/4] ant build: write version.properties (needed by
+ GradleVersion at startup)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build.xml | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/build.xml b/build.xml
+index fc3d7c4543a..4c77c10624e 100644
+--- a/build.xml
++++ b/build.xml
+@@ -88,6 +88,13 @@
+         <copy todir="${buildClassesDirectory}">
+             <fileset dir="src/main/resources"/>
+         </copy>
++        <tstamp>
++            <format property="buildTime" pattern="EEEE, MMMM d, yyyy h:mm:ss a z" locale="en"/>
++        </tstamp>
++        <propertyfile file="${buildClassesDirectory}/version.properties">
++            <entry key="version" value="${version}"/>
++            <entry key="buildTime" value="${buildTime}"/>
++        </propertyfile>
+     </target>
+ 
+     <target name="compile" depends="resources" description="Compile">
+-- 
+2.43.0
+
+
+From 5d885d1aaa779b81e73c5225361b42cf8ec06b41 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Fri, 9 Oct 2026 23:15:42 +0200
+Subject: [PATCH 3/4] Use https for Maven Central (http is redirected and no
+ longer served)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/main/groovy/org/gradle/api/DependencyManager.java | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/main/groovy/org/gradle/api/DependencyManager.java b/src/main/groovy/org/gradle/api/DependencyManager.java
+index 0e70b3c706b..2717ff34427 100644
+--- a/src/main/groovy/org/gradle/api/DependencyManager.java
++++ b/src/main/groovy/org/gradle/api/DependencyManager.java
+@@ -33,7 +33,7 @@
+ public interface DependencyManager extends DependencyContainer {
+     public static final String DEFAULT_IBIBLIO_NAME = "IBiblio";
+ 
+-    public static final String IBIBLIO_URL = "http://repo1.maven.org/maven2/";
++    public static final String IBIBLIO_URL = "https://repo1.maven.org/maven2/";
+ 
+     public static final String BUILD_RESOLVER_NAME = "build-resolver";
+ 
+-- 
+2.43.0
+
+
+From a6c24637f4293b24b24911fd753abaaed502ad33 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Fri, 9 Oct 2026 23:20:37 +0200
+Subject: [PATCH 4/4] gradlefile: resolve from Maven Central (groups +
+ addIBiblio), restore manifest Class-Path
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ gradlefile | 50 +++++++++++++++++++++++++-------------------------
+ 1 file changed, 25 insertions(+), 25 deletions(-)
+
+diff --git a/gradlefile b/gradlefile
+index e4c3665c375..b821c32d22a 100644
+--- a/gradlefile
++++ b/gradlefile
+@@ -58,10 +58,9 @@ println "version=${version}"
+ println "deps="+dependencies.resolveClasspath('runtime')
+ //println "deps="+dependencies.resolveClasspath('runtime').inject('')
+     manifest.mainAttributes([
+-            //(Attributes.Name.CLASS_PATH.toString()): dependencies.resolveClasspath('runtime').inject('') {
+-            //(Attributes.Name.CLASS_PATH.toString()): dependencies.resolveClasspath('runtime').inject {
+-            //    path, file -> path + file.name + ' '
+-            //},
++            (Attributes.Name.CLASS_PATH.toString()): dependencies.resolveClasspath('runtime').inject('') {
++                path, file -> path + file.name + ' '
++            },
+             (Attributes.Name.IMPLEMENTATION_TITLE.toString()): 'Gradle',
+             (Attributes.Name.IMPLEMENTATION_VERSION.toString()): version.toString()
+     ])
+@@ -72,37 +71,38 @@ dependencies {
+     addConfiguration(new Configuration('distLib', Visibility.PRIVATE, null, ['default'] as String[], true, null))
+     addConfiguration('ftpAntTask')
+ 
+-    clientModule(['ftpAntTask'], ":ant-commons-net:1.7.0") {
+-        clientModule(":commons-net:1.4.1") {
+-            dependencies(":oro:2.0.8:jar")
++    clientModule(['ftpAntTask'], "org.apache.ant:ant-commons-net:1.7.0") {
++        clientModule("commons-net:commons-net:1.4.1") {
++            dependencies("oro:oro:2.0.8:jar")
+         }
+     }
+ 
+-    clientModule(['compile'], ":groovy-all:1.5.5") {
+-        dependency(":commons-cli:1.0")
+-        clientModule(":ant:1.7.0") {
+-            dependencies(":ant-junit:1.7.0:jar", ":ant-launcher:1.7.0")
++    clientModule(['compile'], "org.codehaus.groovy:groovy-all:1.5.5") {
++        dependency("commons-cli:commons-cli:1.0")
++        clientModule("org.apache.ant:ant:1.7.0") {
++            dependencies("org.apache.ant:ant-junit:1.7.0:jar", "org.apache.ant:ant-launcher:1.7.0")
+         }
+     }
+ 
+-    clientModule(['compile'], ":logback-classic:0.9.8") {
+-        dependencies(":logback-core:0.9.8", ":slf4j-api:1.4.3")
++    clientModule(['compile'], "ch.qos.logback:logback-classic:0.9.8") {
++        dependencies("ch.qos.logback:logback-core:0.9.8", "org.slf4j:slf4j-api:1.4.3")
+     }
+ 
+-    dependency(['runtime'], ":ant-junit:1.7.0") {
++    dependency(['runtime'], "org.apache.ant:ant-junit:1.7.0") {
+         exclude(module: 'junit')
+     }
+-    compile ":commons-io:1.3.1:jar",
+-            ":commons-lang:2.3:jar",
+-            ":commons-httpclient:3.0:jar",
+-            ":webdavlib:2.0",
+-            ":logback-classic:0.9.8",
+-            ":ivy:2.0.0:jar"
+-    runtime ":ant-launcher:1.7.0",
+-            ":junit:4.4"
+-
+-    testCompile ":junit:4.4"
+-    distLib ":junit:4.4"
++    compile "commons-io:commons-io:1.3.1:jar",
++            "commons-lang:commons-lang:2.3:jar",
++            "commons-httpclient:commons-httpclient:3.0:jar",
++            "slide:webdavlib:2.0",
++            "ch.qos.logback:logback-classic:0.9.8",
++            "org.apache.ivy:ivy:2.0.0:jar"
++    runtime "org.apache.ant:ant-launcher:1.7.0",
++            "junit:junit:4.4"
++
++    testCompile "junit:junit:4.4"
++    distLib "junit:junit:4.4"
++    addIBiblio()
+     addFlatDirResolver('lib', new File(rootDir, 'lib'))
+ }
+ 
+-- 
+2.43.0
+

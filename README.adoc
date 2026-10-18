@@ -20,6 +20,7 @@
 ----
 ./gradle			# a checkout of the official gradle repository
 ./scripts			# the java classes that bootstraps a gradle version
+./patches			# our changes to the official sources, one patch per gradle-x.y branch
 ./sandbox			# minimalistic gradle projects to test the final gradle version is alive and building
 ./target			# the places where built versions will live
 ./target/gradle-x.x-minimal	# the bootstraped version
@@ -96,3 +97,49 @@ With a JDK 11 or newer, the compile step can be skipped: `java scripts/GradleMin
   build files; that rebuild is the one installed in `target/gradle-<v>`
 * `scripts/minimal-bootstrap.py` is the Python prototype, for 4.0 only
 
+== Helper scripts (scripts/)
+The bootstrap scripts (`GradleMinimalBootstrap*.java`) need only a JDK. The other scripts help replaying the steps
+of the chain that are built by an earlier Gradle (Python 3 and sh); their header comment gives the details and usage:
+
+[cols="1,3,2"]
+|===
+| Script			| Purpose											| Used for
+
+| `try-build.py`		| builds a tag with a builder in a worktree `work/<branch>`, then `-v` and a sandbox build	| every Gradle-built step
+| `create-branches.sh`		| recreates the `gradle-x.y` branches from `patches/` (see below)				| a fresh clone
+| `minimal-bootstrap.py`	| Python prototype of the minimal bootstrap (the Java scripts come from it)			| 4.0, kept for reference
+| `patch-deps.py`		| makes an early build file resolve from Maven Central, called by `try-build.py`		| the 0.x steps
+| `gradle-isolated.sh`		| runs a 0.x builder with only `BootstrapMain` on the class path				| the 0.x builders
+| `make-alternate.py`		| copies the build files as `<name>.gradle.<builder>`, to translate by hand			| 2.0, 3.0, 4.0 bootstrap
+| `maven-proxy.py`		| plain-HTTP mirror of the Maven repositories on `localhost:8765` (no SNI in 1.x)		| the 1.x builders
+| `versions-table.py`		| read-only table of the minor releases (Groovy, scripts, JDK) from the tags			| `gradle_versions.adoc`
+|===
+
+== Our changes to the official sources (patches/)
+* some versions need small changes to build today (repositories that are gone, artifacts replaced by a close
+  version, alternate build files for the early versions); they live on local branches `gradle-x.y` of `./gradle`,
+  started from the version tag, that the official repository does not have
+* `patches/` keeps them outside of the repository:
+** `patches/gradle-x.y.patch`: the commits of branch `gradle-x.y` (`git format-patch`, messages and authors kept)
+** `patches/branches.tsv`: one line per branch: branch, base tag (or commit), base commit, patch file (`-` when the
+   branch has no commit of its own, it is then the official tag unchanged)
+* a TSV is a plain text table, one line per row, columns separated by a TAB character
+
+=== Recreating the branches
+
+Run from the project directory, with the official repository cloned in `./gradle`:
+
+[source,sh]
+----
+scripts/create-branches.sh                        # all the branches of patches/branches.tsv
+scripts/create-branches.sh gradle-8.0 gradle-9.4  # only these
+scripts/create-branches.sh --no-worktree          # the branches only, no worktree in work/
+----
+
+* for each branch: checks that the base tag resolves to the recorded commit, creates the worktree `work/gradle-x.y` on
+  a new branch `gradle-x.y` at that commit, applies the patch with `git am`
+* a branch or a directory that already exists is skipped; the official tags and branches are never changed
+* the recreated branches have the same files as the original ones (checked on all 24 branches), their commit ids
+  differ (new commit dates, the committer is the local git identity)
+* to refresh the patches after new commits on a branch: `git -C gradle format-patch --stdout <base>..gradle-x.y >
+  patches/gradle-x.y.patch`, and add a line to `patches/branches.tsv` for a new branch

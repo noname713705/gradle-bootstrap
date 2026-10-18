@@ -1,0 +1,69 @@
+From 9721133fc53a53efe9700210ab75bc9f5b711233 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Thu, 15 Oct 2026 21:35:15 +0200
+Subject: [PATCH] Rebuild Gradle 8.0 from its original build files (download
+ fixes only)
+
+Built by a minimal bootstrap of 8.0 (scripts/GradleMinimalBootstrap80.java,
+compiled without Gradle). Fixes, all marked "bootstrap:":
+- jcenter -> repo.gradle.org/gradle/public (jcenter is gone, requests hang
+  until they time out; junit-xml-parser 1.0.0 is there)
+- http-builder 0.7.2 (on no repository anymore) -> 0.7.1
+
+Run (JDK 11): IGNORE_MIRROR=true gradle -Porg.gradle.java.installations.auto-download=false
+  install -Pgradle_installPath=build/distributions/rebuilt-minimal
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build-logic/build-platform/build.gradle.kts | 3 ++-
+ build-logic/settings.gradle.kts             | 4 +++-
+ settings.gradle.kts                         | 4 +++-
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/build-logic/build-platform/build.gradle.kts b/build-logic/build-platform/build.gradle.kts
+index 42bc0e38e3c..ccaaf47eef7 100644
+--- a/build-logic/build-platform/build.gradle.kts
++++ b/build-logic/build-platform/build.gradle.kts
+@@ -60,7 +60,8 @@ dependencies {
+         api("org.asciidoctor:asciidoctorj-pdf:1.5.4")
+         api("com.beust:jcommander:1.78")
+         api("org.codehaus.groovy:$groovyVersion")
+-        api("org.codehaus.groovy.modules.http-builder:http-builder:0.7.2") // TODO maybe change group name when upgrading to Groovy 4
++        api("org.codehaus.groovy.modules.http-builder:http-builder:0.7.1") // bootstrap: 0.7.2 is on no repository anymore, no newer version exists: 0.7.1 (Maven Central)
++        // TODO maybe change group name when upgrading to Groovy 4
+         api("org.codenarc:CodeNarc:$codenarcVersion")
+         api("org.eclipse.jgit:org.eclipse.jgit:5.7.0.202003110725-r")
+         api("org.javassist:javassist:3.27.0-GA")
+diff --git a/build-logic/settings.gradle.kts b/build-logic/settings.gradle.kts
+index d283378e706..b9397c96468 100644
+--- a/build-logic/settings.gradle.kts
++++ b/build-logic/settings.gradle.kts
+@@ -35,7 +35,9 @@ dependencyResolutionManagement {
+                 includeVersionByRegex("com.gradle", "gradle-enterprise-gradle-plugin", rcAndMilestonesPattern)
+             }
+         }
+-        jcenter {
++        // bootstrap: jcenter is gone (requests hang until they time out): junit-xml-parser is on repo.gradle.org/gradle/public
++        maven {
++            url = uri("https://repo.gradle.org/gradle/public")
+             content {
+                 includeModule("org.openmbee.junit", "junit-xml-parser")
+                 includeModule("org.codehaus.groovy.modules", "http-builder-ng-core")
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+index c040f1a2572..860e857040f 100644
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -13,7 +13,9 @@ pluginManagement {
+                 includeVersionByRegex("com.gradle", "gradle-enterprise-gradle-plugin", rcAndMilestonesPattern)
+             }
+         }
+-        jcenter {
++        // bootstrap: jcenter is gone (requests hang until they time out): junit-xml-parser is on repo.gradle.org/gradle/public
++        maven {
++            url = uri("https://repo.gradle.org/gradle/public")
+             content {
+                 includeModule("org.openmbee.junit", "junit-xml-parser")
+                 includeModule("org.codehaus.groovy.modules", "http-builder-ng-core")
+-- 
+2.43.0
+

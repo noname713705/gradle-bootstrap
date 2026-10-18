@@ -1,0 +1,1039 @@
+From b0d1e6a0e80c835fb2d5f486f7c543edf3143158 Mon Sep 17 00:00:00 2001
+From: noname713705 <noname713705@gmail.com>
+Date: Tue, 13 Oct 2026 09:35:15 +0200
+Subject: [PATCH] Build REL_0.9 with gradle-0.8 from build files in the 0.8 DSL
+
+The 0.9 build files are unchanged. Added, for the gradle-0.8 builder:
+- settings.gradle.0.8: the projects of 0.9 without docs, with the <name>.gradle.0.8 build files
+- buildSrc/settings.gradle: gradle-0.8 builds buildSrc before any settings script, from the buildSrc
+  directory only; selects buildSrc/build.gradle.0.8 when the running Gradle is 0.8, any other Gradle
+  keeps buildSrc/build.gradle
+- build.gradle.0.8, buildSrc/build.gradle.0.8, subprojects/*/<name>.gradle.0.8: the 0.9 files translated
+  to 0.8 (usePlugin, builder classpaths, version computed inline, core's external dependencies added to
+  the other projects, version properties and gradle-wrapper.jar written after the compilation,
+  explodedDist with ant); ide, code quality, docs, test fixtures, integration tests, zips, install,
+  release left out
+- Maven Central and repo.gradle.org (pmaven) instead of gradle.artifactoryonline.com;
+  biz.aQute:bndlib 0.0.384 (on no repository anymore) -> 1.10.0
+Source: MAVEN_CENTRAL_URL https, without trailing slash.
+
+Run: gradle-0.8 -c settings.gradle.0.8 -Dskip.test=true -Dskip.compileTestJava=true
+  -Dskip.compileTestGroovy=true -Dskip.processTestResources=true clean explodedDist
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ build.gradle.0.8                              | 193 ++++++++++++++++++
+ buildSrc/build.gradle.0.8                     |  40 ++++
+ buildSrc/settings.gradle                      |  13 ++
+ settings.gradle.0.8                           |  45 ++++
+ .../gradle-announce/announce.gradle.0.8       |  26 +++
+ subprojects/gradle-antlr/antlr.gradle.0.8     |  32 +++
+ .../code-quality.gradle.0.8                   |  38 ++++
+ subprojects/gradle-core/core.gradle.0.8       |  77 +++++++
+ .../api/artifacts/ResolverContainer.java      |   2 +-
+ subprojects/gradle-eclipse/eclipse.gradle.0.8 |  31 +++
+ subprojects/gradle-idea/idea.gradle.0.8       |  27 +++
+ subprojects/gradle-jetty/jetty.gradle.0.8     |  36 ++++
+ .../gradle-launcher/launcher.gradle.0.8       |  35 ++++
+ subprojects/gradle-maven/maven.gradle.0.8     |  26 +++
+ .../gradle-open-api/open-api.gradle.0.8       |  25 +++
+ subprojects/gradle-osgi/osgi.gradle.0.8       |  32 +++
+ subprojects/gradle-plugins/plugins.gradle.0.8 |  49 +++++
+ subprojects/gradle-scala/scala.gradle.0.8     |  30 +++
+ subprojects/gradle-ui/ui.gradle.0.8           |  50 +++++
+ subprojects/gradle-wrapper/wrapper.gradle.0.8 |  39 ++++
+ 20 files changed, 845 insertions(+), 1 deletion(-)
+ create mode 100644 build.gradle.0.8
+ create mode 100644 buildSrc/build.gradle.0.8
+ create mode 100644 buildSrc/settings.gradle
+ create mode 100644 settings.gradle.0.8
+ create mode 100644 subprojects/gradle-announce/announce.gradle.0.8
+ create mode 100644 subprojects/gradle-antlr/antlr.gradle.0.8
+ create mode 100644 subprojects/gradle-code-quality/code-quality.gradle.0.8
+ create mode 100644 subprojects/gradle-core/core.gradle.0.8
+ create mode 100644 subprojects/gradle-eclipse/eclipse.gradle.0.8
+ create mode 100644 subprojects/gradle-idea/idea.gradle.0.8
+ create mode 100644 subprojects/gradle-jetty/jetty.gradle.0.8
+ create mode 100644 subprojects/gradle-launcher/launcher.gradle.0.8
+ create mode 100644 subprojects/gradle-maven/maven.gradle.0.8
+ create mode 100644 subprojects/gradle-open-api/open-api.gradle.0.8
+ create mode 100644 subprojects/gradle-osgi/osgi.gradle.0.8
+ create mode 100644 subprojects/gradle-plugins/plugins.gradle.0.8
+ create mode 100644 subprojects/gradle-scala/scala.gradle.0.8
+ create mode 100644 subprojects/gradle-ui/ui.gradle.0.8
+ create mode 100644 subprojects/gradle-wrapper/wrapper.gradle.0.8
+
+diff --git a/build.gradle.0.8 b/build.gradle.0.8
+new file mode 100644
+index 00000000000..137263f2671
+--- /dev/null
++++ b/build.gradle.0.8
+@@ -0,0 +1,193 @@
++// build.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++import java.util.jar.Attributes
++import org.gradle.api.artifacts.repositories.WebdavResolver
++import org.gradle.api.internal.artifacts.dependencies.DefaultSelfResolvingDependency
++
++import org.gradle.build.samples.WrapperProjectCreator
++import org.gradle.build.Version
++import org.gradle.build.Git
++
++/**
++ * For building Gradle you usually don't need to specify any properties. Only certain functionality of the Gradle requires
++ * setting certain properties. Those properties can be set in the gradle.properties file in the the gradle user home. The
++ * following properties can be set:
++ *
++ * Uploading distributions to Gradle's release and snapshot repository at codehaus: codehausUserName, codehausUserPassword
++ * Uploading the userguide and the javadoc to Gradle's website: websiteFtpUserName, websiteFtpUserPassword
++ * Using the build to create a new distribution and install it on the local machine: gradle_installPath
++ */
++
++// gradle-0.8 builder: the buildSrc class Version needs FileVisitDetails.lastModified (0.9 api): the same version
++// (nextVersion-timestamp, not a release) computed here
++class BootstrapVersion {
++    String versionNumber
++    Date buildTime
++    String toString() { versionNumber }
++    String getTimestamp() { new java.text.SimpleDateFormat('yyyyMMddHHmmssZ').format(buildTime) }
++    boolean isRelease() { false }
++}
++version = new BootstrapVersion(buildTime: new Date())
++version.versionNumber = "$nextVersion-$version.timestamp"
++
++defaultTasks 'assemble'
++
++// gradle-0.8 builder: usePlugin (apply plugin from 0.9)
++usePlugin 'base' // no java-base plugin in gradle-0.8 (the root project has no sources)
++
++startScriptsDir = new File("$buildDir/startScripts")
++
++archivesBaseName = 'gradle'
++
++libraries = [
++        ant: 'org.apache.ant:ant:1.8.1@jar',
++        ant_junit: 'org.apache.ant:ant-junit:1.8.1@jar',
++        ant_launcher: 'org.apache.ant:ant-launcher:1.8.1@jar',
++        ant_nodeps: 'org.apache.ant:ant-nodeps:1.8.1@jar',
++        ant_antlr: 'org.apache.ant:ant-antlr:1.8.1@jar',
++        antlr: 'antlr:antlr:2.7.7@jar',
++        asm_all: 'asm:asm-all:3.2@jar',
++        commons_cli: 'commons-cli:commons-cli:1.2@jar',
++        commons_io: 'commons-io:commons-io:1.4@jar',
++        commons_lang: 'commons-lang:commons-lang:2.5@jar',
++        dom4j: 'dom4j:dom4j:1.6.1@jar',
++        google_collections: 'com.google.collections:google-collections:1.0@jar',
++        groovy: 'org.codehaus.groovy:groovy-all:1.7.6@jar',
++        ivy: 'org.apache.ivy:ivy:2.2.0@jar',
++        jaxen: 'jaxen:jaxen:1.1@jar',
++        slf4j_api: 'org.slf4j:slf4j-api:1.6.1@jar',
++        jcl_to_slf4j: 'org.slf4j:jcl-over-slf4j:1.6.1@jar',
++        jul_to_slf4j: 'org.slf4j:jul-to-slf4j:1.6.1@jar',
++        log4j_to_slf4j: 'org.slf4j:log4j-over-slf4j:1.6.1@jar',
++        logback_classic: 'ch.qos.logback:logback-classic:0.9.24@jar',
++        logback_core: 'ch.qos.logback:logback-core:0.9.24@jar',
++        junit: 'junit:junit:4.8.1',
++        xmlunit: 'xmlunit:xmlunit:1.3',
++]
++
++libraries.spock = ['org.spockframework:spock-core:0.4-groovy-1.7@jar', libraries.groovy, 'cglib:cglib-nodep:2.2', 'org.objenesis:objenesis:1.2']
++libraries.groovy_depends = [libraries.groovy, libraries.commons_cli]
++libraries.jetty_depends = ["org.mortbay.jetty:jetty:6.1.25@jar", "org.mortbay.jetty:jetty-util:6.1.25@jar",
++        "org.mortbay.jetty:servlet-api:2.5-20081211@jar"]
++
++allprojects {
++    group = 'org.gradle'
++
++    repositories {
++        // gradle.artifactoryonline.com (REL_0.9) does not exist anymore: Maven Central, and repo.gradle.org for
++        // org.sonatype.pmaven (pmaven-common, pmaven-groovy)
++        mavenCentral()
++        mavenRepo(urls: 'https://repo.gradle.org/gradle/libs')
++    }
++
++    version = this.version
++}
++
++def FIRST_LEVEL_JMOCK = ['org.hamcrest:hamcrest-core:1.1@jar', 'org.hamcrest:hamcrest-library:1.1@jar', 'org.jmock:jmock-junit4:2.5.1@jar']
++
++configure(groovyProjects()) {
++    // gradle-0.8 builder: usePlugin (apply plugin from 0.9); eclipse, idea, code quality not used for the bootstrap
++    usePlugin 'groovy'
++    // gradle-0.8 builder: no plugins.withType(JavaPlugin).whenPluginAdded {} (was in allprojects)
++    sourceCompatibility = 1.5
++    targetCompatibility = 1.5
++
++    archivesBaseName = "gradle-${name.replaceAll("\\p{Upper}") { "-${it.toLowerCase()}" } }"
++
++    dependencies {
++        testCompile libraries.junit, FIRST_LEVEL_JMOCK, libraries.spock
++        testCompile module("org.jmock:jmock:2.5.1") {
++            dependencies('org.jmock:jmock-legacy:2.5.1@jar', 'org.objenesis:objenesis:1.0', 'cglib:cglib-nodep:2.1_3')
++            dependencies(FIRST_LEVEL_JMOCK as Object[])
++        }
++        // todo - these should not be here
++        testCompile 'org.jmock:jmock-legacy:2.5.1@jar', 'org.objenesis:objenesis:1.0', 'cglib:cglib-nodep:2.1_3'
++    }
++
++    tasks.withType(Jar).each { jar ->
++        jar.manifest.mainAttributes([
++                (Attributes.Name.IMPLEMENTATION_TITLE.toString()): 'Gradle',
++                (Attributes.Name.IMPLEMENTATION_VERSION.toString()): version.toString(), // gradle-0.8: strings only
++        ])
++    }
++}
++
++configurations {
++    dists
++    runtime {
++        visible = false
++    }
++    plugins {
++        visible = false
++    }
++    testRuntime {
++        extendsFrom runtime
++        extendsFrom plugins
++    }
++}
++
++dependencies {
++    // gradle-0.8 builder: Project objects are no dependency notation, project(path) inside dependencies {} is
++    runtime runtimeProjects().collect { project(it.path) }
++    plugins pluginProjects().collect { project(it.path) }
++}
++
++evaluationDependsOn(':core')
++
++// gradle-0.8 builder: compile project(':core') does not pass on the (@jar) external dependencies of core, as 0.9
++// does: they are added to the other groovy projects here (core is evaluated, see above)
++(groovyProjects() - project(':core')).each { p ->
++    project(':core').configurations.compile.dependencies.findAll { !(it instanceof ProjectDependency) }.each { dep ->
++        p.dependencies.add('compile', dep)
++    }
++}
++
++clean.dependsOn subprojects.collect { "$it.path:clean" }
++
++// The distribution image of REL_0.9 (binDistImage) without the docs: gradle-0.8 has no copySpec {},
++// written as a Copy task into build/distributions/exploded
++task explodedDist(dependsOn: ['launcher:startScripts', configurations.runtime, configurations.plugins]) << {
++    // gradle-0.8 builder: the Copy task of 0.8 does not handle this spec, written with ant (same layout)
++    File distDir = file("$buildDir/distributions/exploded")
++    ant.delete(dir: distDir)
++    ant.copy(todir: distDir) { fileset(dir: 'src/toplevel') }
++    ant.copy(todir: new File(distDir, 'bin')) { fileset(dir: startScriptsDir) }
++    ant.chmod(dir: new File(distDir, 'bin'), perm: 'ugo+rx', includes: '**/*')
++    Set runtimeFiles = configurations.runtime.files
++    runtimeFiles.each { File file -> ant.copy(file: file, todir: new File(distDir, 'lib')) }
++    // gradle-0.8: no FileCollection.minus, the plugin jars not already in lib/
++    (configurations.plugins.files - runtimeFiles).each { File file -> ant.copy(file: file, todir: new File(distDir, 'lib/plugins')) }
++}
++
++// Left out of build.gradle (REL_0.9) for the bootstrap with gradle-0.8: ide/idea/eclipse configuration, code quality,
++// check and test aggregates, docs (evaluationDependsOn(':docs'), distDocs, allDistImage), zips, integration tests,
++// install/installAll (buildSrc Install needs Sync), developer/ci builds, release, wrapper.
++
++def groovyProjects() {
++    subprojects.findAll { project -> project.name != 'docs' }
++}
++
++def runtimeProjects() {
++    groovyProjects() - pluginProjects()
++}
++
++def pluginProjects() {
++    ['plugins', 'codeQuality', 'jetty', 'antlr', 'wrapper', 'osgi', 'maven', 'eclipse', 'idea', 'announce', 'scala'].collect {
++        project(it)
++    }
++}
+diff --git a/buildSrc/build.gradle.0.8 b/buildSrc/build.gradle.0.8
+new file mode 100644
+index 00000000000..9875b73efa1
+--- /dev/null
++++ b/buildSrc/build.gradle.0.8
+@@ -0,0 +1,40 @@
++// buildSrc/build.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++// gradle-0.8 builder: usePlugin (apply plugin from 0.9); code-quality, idea not used for the bootstrap
++usePlugin 'groovy'
++
++repositories {
++    // gradle.artifactoryonline.com (REL_0.9) does not exist anymore: Maven Central
++    mavenCentral()
++}
++
++dependencies {
++    // gradle-0.8 builder: no gradleApi()/localGroovy(), the classpaths of the builder (as buildSrc of REL-0.8)
++    compile files(org.gradle.util.BootstrapUtil.gradleClasspath)
++    groovy files(org.gradle.util.BootstrapUtil.groovyFiles)
++    compile 'com.google.collections:google-collections:1.0@jar'
++    // tests not run: spock (only on the artifactory repository) left out
++    testCompile 'junit:junit:4.8.1@jar'
++}
++
++// the documentation helpers (org.gradle.build.docs) need a newer api: not compiled, docs are not built;
++// a forked groovyc ignores the excludes: compile in-process (buildSrc compiles against the builder anyway)
++compileGroovy.exclude 'org/gradle/build/docs/**'
++// Install (task type of install/installAll) extends Sync, not in gradle-0.8: not compiled, not used for the bootstrap
++compileGroovy.exclude 'org/gradle/build/Install.groovy'
++compileGroovy.groovyOptions.fork = false
+diff --git a/buildSrc/settings.gradle b/buildSrc/settings.gradle
+new file mode 100644
+index 00000000000..bfeb270bd58
+--- /dev/null
++++ b/buildSrc/settings.gradle
+@@ -0,0 +1,13 @@
++// Bootstrap only (branch gradle-0.9): Gradle 0.9 is built by gradle-0.8 from build files in the 0.8 DSL
++// (see settings.gradle.0.8). gradle-0.8 builds buildSrc before any settings script and only from this
++// directory: this file points it to build.gradle.0.8. Any other Gradle (the bootstrapped 0.9 itself, later
++// versions) keeps the default build.gradle.
++String runningVersion
++try {
++    runningVersion = gradle.gradleVersion                          // 0.9 and later
++} catch (MissingPropertyException e) {
++    runningVersion = new org.gradle.util.GradleVersion().version   // 0.8: no gradle object in settings
++}
++if (runningVersion.startsWith('0.8')) {
++    rootProject.buildFileName = 'build.gradle.0.8'
++}
+diff --git a/settings.gradle.0.8 b/settings.gradle.0.8
+new file mode 100644
+index 00000000000..f3d25c6b8b1
+--- /dev/null
++++ b/settings.gradle.0.8
+@@ -0,0 +1,45 @@
++// Settings for building Gradle 0.9 (REL_0.9 sources) with Gradle 0.8, the builder of this step.
++// Same projects as settings.gradle (without docs), every build file is the <name>.0.8 one, in the DSL of Gradle 0.8.
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++include 'core'
++include 'wrapper'
++include 'launcher'
++include 'plugins'
++include 'scala'
++include 'eclipse'
++include 'idea'
++include 'osgi'
++include 'maven'
++include 'announce'
++include 'jetty'
++include 'codeQuality'
++include 'antlr'
++include 'ui'
++include 'openApi'
++// include 'docs': documentation only, not built for the bootstrap
++
++rootProject.name = 'gradle'
++rootProject.buildFileName = 'build.gradle.0.8'
++rootProject.children.each {project ->
++    String fileBaseName = project.name.replaceAll("\\p{Upper}") { "-${it.toLowerCase()}" }
++    project.projectDir = new File(settingsDir, "subprojects/gradle-$fileBaseName")
++    project.buildFileName = "${fileBaseName}.gradle.0.8"
++    assert project.projectDir.isDirectory()
++    assert project.buildFile.isFile()
++}
++
++// buildSrc: gradle-0.8 builds it before this file is read, buildSrc/settings.gradle selects buildSrc/build.gradle.0.8
+diff --git a/subprojects/gradle-announce/announce.gradle.0.8 b/subprojects/gradle-announce/announce.gradle.0.8
+new file mode 100644
+index 00000000000..e8df0db7c1e
+--- /dev/null
++++ b/subprojects/gradle-announce/announce.gradle.0.8
+@@ -0,0 +1,26 @@
++// subprojects/gradle-announce/announce.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile libraries.slf4j_api
++    compile project(':core')
++    compile project(':plugins')
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
+diff --git a/subprojects/gradle-antlr/antlr.gradle.0.8 b/subprojects/gradle-antlr/antlr.gradle.0.8
+new file mode 100644
+index 00000000000..4ea94580d2a
+--- /dev/null
++++ b/subprojects/gradle-antlr/antlr.gradle.0.8
+@@ -0,0 +1,32 @@
++// subprojects/gradle-antlr/antlr.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++// apply plugin: 'groovy': the groovy plugin is applied by the root project (usePlugin, gradle-0.8)
++
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++    compile project(':plugins')
++
++    compile libraries.slf4j_api,
++            libraries.ant,
++            libraries.ant_antlr,
++            libraries.antlr
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
+diff --git a/subprojects/gradle-code-quality/code-quality.gradle.0.8 b/subprojects/gradle-code-quality/code-quality.gradle.0.8
+new file mode 100644
+index 00000000000..5d484ccad74
+--- /dev/null
++++ b/subprojects/gradle-code-quality/code-quality.gradle.0.8
+@@ -0,0 +1,38 @@
++// subprojects/gradle-code-quality/code-quality.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++    compile project(':plugins')
++
++    compile "org.codenarc:CodeNarc:0.11@jar"
++    compile libraries.slf4j_api
++
++    // CodeNarc dependencies
++    runtime libraries.log4j_to_slf4j,
++            "org.gmetrics:GMetrics:0.3@jar"
++
++    // Checkstyle dependencies
++    runtime "com.puppycrawl.tools:checkstyle:5.3@jar",
++            libraries.google_collections,
++            libraries.antlr,
++            "commons-beanutils:commons-beanutils-core:1.8.3@jar"
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
+diff --git a/subprojects/gradle-core/core.gradle.0.8 b/subprojects/gradle-core/core.gradle.0.8
+new file mode 100644
+index 00000000000..70e589429fc
+--- /dev/null
++++ b/subprojects/gradle-core/core.gradle.0.8
+@@ -0,0 +1,77 @@
++// subprojects/gradle-core/core.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++import java.text.DateFormat
++
++// gradle-0.8 builder: groovy plugin applied by the root project (usePlugin); integTest.gradle (integration
++// tests), test fixtures and the ide/idea/eclipse configuration left out
++
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile "commons-httpclient:commons-httpclient:3.0@jar", "commons-codec:commons-codec:1.2@jar", libraries.jcl_to_slf4j
++
++    compile libraries.ivy, "com.jcraft:jsch:0.1.42@jar", 'com.jcraft:jzlib:1.0.7@jar'
++
++    compile libraries.ant,
++            libraries.ant_nodeps,
++            libraries.logback_classic,
++            libraries.logback_core,
++            libraries.slf4j_api,
++            libraries.jul_to_slf4j,
++            libraries.commons_io,
++            libraries.commons_lang,
++            "commons-codec:commons-codec:1.2@jar",
++            libraries.google_collections,
++            "commons-collections:commons-collections:3.2.1@jar",
++            "slide:webdavlib:2.0@jar",
++            "org.apache.maven:maven-ant-tasks:2.1.1@jar",
++            libraries.asm_all,
++            'org.fusesource.jansi:jansi:1.2.1',
++            'org.jruby.ext.posix:jna-posix:1.0.3',
++            'org.sonatype.pmaven:pmaven-common:0.8-20100325@jar',
++            'org.sonatype.pmaven:pmaven-groovy:0.8-20100325@jar',
++            'org.codehaus.plexus:plexus-component-annotations:1.5.2'
++
++    runtime 'net.java.dev.jna:jna:3.2.2'
++
++    runtime libraries.log4j_to_slf4j, libraries.jcl_to_slf4j
++
++    testCompile libraries.xmlunit
++
++    compile libraries.ant_launcher
++
++    // integTestCompile, testFixtures, integTestFixtures left out: tests not run
++}
++
++// gradle-0.8 builder: no @Input task annotation (WriteVersionProperties of REL_0.9); the same properties file,
++// /org/gradle/version.properties (GradleVersion of 0.9), written after the compilation
++compileGroovy.doLast {
++    File propertiesFile = new File(sourceSets.main.classesDir, 'org/gradle/version.properties')
++    logger.info('Write version properties to: {}', propertiesFile)
++    Properties versionProperties = new Properties()
++    versionProperties.putAll([
++            version: project.version.toString(),
++            buildTime: DateFormat.getDateTimeInstance(DateFormat.FULL, DateFormat.FULL).format(project.version.buildTime)
++    ])
++    propertiesFile.parentFile.mkdirs()
++    propertiesFile.withOutputStream {
++        versionProperties.store(it, '')
++    }
++}
++
++[compileGroovy, compileTestGroovy]*.groovyOptions*.fork(memoryInitialSize: '128M', memoryMaximumSize: '1G')
+diff --git a/subprojects/gradle-core/src/main/groovy/org/gradle/api/artifacts/ResolverContainer.java b/subprojects/gradle-core/src/main/groovy/org/gradle/api/artifacts/ResolverContainer.java
+index 89d8ae86ce3..a470fe378df 100644
+--- a/subprojects/gradle-core/src/main/groovy/org/gradle/api/artifacts/ResolverContainer.java
++++ b/subprojects/gradle-core/src/main/groovy/org/gradle/api/artifacts/ResolverContainer.java
+@@ -54,7 +54,7 @@
+  */
+ public interface ResolverContainer extends NamedDomainObjectContainer<DependencyResolver>, NamedDomainObjectCollection<DependencyResolver> {
+     String DEFAULT_MAVEN_CENTRAL_REPO_NAME = "MavenRepo";
+-    String MAVEN_CENTRAL_URL = "http://repo1.maven.org/maven2/";
++    String MAVEN_CENTRAL_URL = "https://repo1.maven.org/maven2";
+     String MAVEN_REPO_PATTERN = "[organisation]/[module]/[revision]/[artifact]-[revision](-[classifier]).[ext]";
+     String FLAT_DIR_RESOLVER_PATTERN = "[artifact](-[revision])(-[classifier]).[ext]";
+     String DEFAULT_CACHE_ARTIFACT_PATTERN
+diff --git a/subprojects/gradle-eclipse/eclipse.gradle.0.8 b/subprojects/gradle-eclipse/eclipse.gradle.0.8
+new file mode 100644
+index 00000000000..a69d942cc4e
+--- /dev/null
++++ b/subprojects/gradle-eclipse/eclipse.gradle.0.8
+@@ -0,0 +1,31 @@
++// subprojects/gradle-eclipse/eclipse.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':scala')
++    compile project(':core')
++    compile project(':plugins')
++    compile libraries.commons_io
++    compile libraries.slf4j_api, libraries.jaxen
++    compile 'dom4j:dom4j:1.6.1@jar'
++
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
++
+diff --git a/subprojects/gradle-idea/idea.gradle.0.8 b/subprojects/gradle-idea/idea.gradle.0.8
+new file mode 100644
+index 00000000000..21d8444d919
+--- /dev/null
++++ b/subprojects/gradle-idea/idea.gradle.0.8
+@@ -0,0 +1,27 @@
++// subprojects/gradle-idea/idea.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++    compile project(':plugins')
++    compile libraries.slf4j_api
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
++
+diff --git a/subprojects/gradle-jetty/jetty.gradle.0.8 b/subprojects/gradle-jetty/jetty.gradle.0.8
+new file mode 100644
+index 00000000000..05e945c217a
+--- /dev/null
++++ b/subprojects/gradle-jetty/jetty.gradle.0.8
+@@ -0,0 +1,36 @@
++// subprojects/gradle-jetty/jetty.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2009 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++    compile project(':plugins')
++
++    compile libraries.slf4j_api,
++            libraries.jetty_depends,
++            "org.mortbay.jetty:jetty-plus:6.1.25@jar"
++
++    runtime "org.mortbay.jetty:jsp-api-2.1:6.1.14@jar",
++            "org.mortbay.jetty:jsp-2.1:6.1.14@jar",
++            "org.eclipse.jdt:core:3.1.1@jar",
++            "org.mortbay.jetty:jetty-naming:6.1.25@jar",
++            "org.mortbay.jetty:jetty-annotations:6.1.25@jar",
++            "org.apache.geronimo.specs:geronimo-annotation_1.0_spec:1.0@jar"
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
+diff --git a/subprojects/gradle-launcher/launcher.gradle.0.8 b/subprojects/gradle-launcher/launcher.gradle.0.8
+new file mode 100644
+index 00000000000..920143c429b
+--- /dev/null
++++ b/subprojects/gradle-launcher/launcher.gradle.0.8
+@@ -0,0 +1,35 @@
++// subprojects/gradle-launcher/launcher.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++import org.gradle.build.startscripts.StartScriptsGenerator
++
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++    compile project(':ui')
++
++    compile libraries.slf4j_api
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
++
++jar.manifest.mainAttributes('Main-Class': "org.gradle.launcher.GradleMain")
++jar.doFirst {
++    jar.manifest.mainAttributes('Class-Path': "${project(':core').jar.archivePath.name}")
++}
++
++task startScripts << {
++    ant.mkdir(dir: startScriptsDir)
++    StartScriptsGenerator.generate(jar.archiveName, startScriptsDir, 'gradle')
++}
++
++// left out for the bootstrap with gradle-0.8 (integration tests / ide):
++// ideaModule {
++//     whenConfigured { module ->
++//         def runtimeProjects = rootProject.groovyProjects() - ([project] +
++//                 configurations.runtime.getAllDependencies(ProjectDependency).collect { it.dependencyProject })
++//         runtimeProjects.each { groovyProject ->
++//             module.dependencies.add(new org.gradle.plugins.idea.model.ModuleDependency(groovyProject.name, "RUNTIME"))
++//         }
++//     }
++// }
+diff --git a/subprojects/gradle-maven/maven.gradle.0.8 b/subprojects/gradle-maven/maven.gradle.0.8
+new file mode 100644
+index 00000000000..ded2f32d5fe
+--- /dev/null
++++ b/subprojects/gradle-maven/maven.gradle.0.8
+@@ -0,0 +1,26 @@
++// subprojects/gradle-maven/maven.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++    compile project(':plugins')
++    compile libraries.slf4j_api
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
+diff --git a/subprojects/gradle-open-api/open-api.gradle.0.8 b/subprojects/gradle-open-api/open-api.gradle.0.8
+new file mode 100644
+index 00000000000..6bd5d6b65ef
+--- /dev/null
++++ b/subprojects/gradle-open-api/open-api.gradle.0.8
+@@ -0,0 +1,25 @@
++// subprojects/gradle-open-api/open-api.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++// apply plugin: 'groovy': the groovy plugin is applied by the root project (usePlugin, gradle-0.8)
++// apply from: "$rootDir/gradle/integTest.gradle": integration tests not run
++
++dependencies {
++    groovy libraries.groovy_depends
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++
++    // integTestCompile libraries.slf4j_api   // tests not run
++    // integTestCompile project(path: ':core', configuration: 'integTestFixtures')   // tests not run
++    // integTestRuntime project(path: ':core', configuration: 'integTestFixturesRuntime')   // tests not run
++}
++
++//create a task for running the integration tests
++// left out for the bootstrap with gradle-0.8 (integration tests / ide):
++// task integTest(type: Test, dependsOn: [ rootProject.intTestImage ]) {
++//     systemProperties['integTest.gradleHomeDir'] = rootProject.intTestImage.integTestGradleHome.absolutePath
++//     systemProperties['integTest.gradleUserHomeDir'] = rootProject.integTest.integTestUserDir.absolutePath
++//     testClassesDir = sourceSets.integTest.classesDir
++//     classpath = sourceSets.integTest.runtimeClasspath + configurations.integTestRuntime
++
++//     doFirst { task -> systemProperties['integTest.gradleHomeDir'] = rootProject.intTestImage.integTestGradleHome.absolutePath }
++// }
+diff --git a/subprojects/gradle-osgi/osgi.gradle.0.8 b/subprojects/gradle-osgi/osgi.gradle.0.8
+new file mode 100644
+index 00000000000..4fb6a9ef345
+--- /dev/null
++++ b/subprojects/gradle-osgi/osgi.gradle.0.8
+@@ -0,0 +1,32 @@
++// subprojects/gradle-osgi/osgi.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++// repositories { mavenRepo urls: 'http://www.aQute.biz/repo' }: does not exist anymore (Maven Central from the root)
++
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++    compile project(':plugins')
++    compile libraries.slf4j_api
++
++    // biz.aQute:bndlib:0.0.384 is on no repository anymore: next newer version on Maven Central
++    compile 'biz.aQute:bndlib:1.10.0@jar'
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
++
+diff --git a/subprojects/gradle-plugins/plugins.gradle.0.8 b/subprojects/gradle-plugins/plugins.gradle.0.8
+new file mode 100644
+index 00000000000..02e69238fa7
+--- /dev/null
++++ b/subprojects/gradle-plugins/plugins.gradle.0.8
+@@ -0,0 +1,49 @@
++// subprojects/gradle-plugins/plugins.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++configurations {
++    testFixtures
++}
++
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++
++    compile libraries.slf4j_api,
++            libraries.commons_lang,
++            libraries.asm_all,
++            libraries.junit,
++            libraries.ant_junit,
++            libraries.ant,
++            'org.testng:testng:5.12.1'
++
++    // This is for the ant junit task. Without it, we get file locking problems with some jvms because the default
++    // transformer does not close files
++    runtime 'xalan:xalan:2.7.1'
++
++    testCompile libraries.xmlunit
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++    // testFixtures sourceSets.test.classes   // tests not run
++}
++
++test {
++    exclude 'org/gradle/api/internal/tasks/testing/junit/ATestClass*.*'
++    // jvmArgs '-Xms128m', '-Xmx256m', '-XX:+HeapDumpOnOutOfMemoryError'   // gradle-0.8: no jvmArgs on test (tests not run)
++}
+diff --git a/subprojects/gradle-scala/scala.gradle.0.8 b/subprojects/gradle-scala/scala.gradle.0.8
+new file mode 100644
+index 00000000000..3312f377b0f
+--- /dev/null
++++ b/subprojects/gradle-scala/scala.gradle.0.8
+@@ -0,0 +1,30 @@
++// subprojects/gradle-scala/scala.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++dependencies {
++    groovy libraries.groovy_depends
++
++    compile project(':core')
++    compile project(':plugins')
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testCompile project(path: ':plugins', configuration: 'testFixtures')   // tests not run
++    testCompile libraries.slf4j_api
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
++
++
++
+diff --git a/subprojects/gradle-ui/ui.gradle.0.8 b/subprojects/gradle-ui/ui.gradle.0.8
+new file mode 100644
+index 00000000000..301e96a600a
+--- /dev/null
++++ b/subprojects/gradle-ui/ui.gradle.0.8
+@@ -0,0 +1,50 @@
++// subprojects/gradle-ui/ui.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++// apply from: "$rootDir/gradle/integTest.gradle": integration tests not run
++
++dependencies {
++    compile project(':core')
++    compile project(':openApi')
++
++    groovy libraries.groovy_depends
++
++    compile libraries.dom4j,
++            libraries.commons_io,
++            libraries.slf4j_api
++
++    runtime libraries.jaxen
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++    // integTestCompile project(path: ':core', configuration: 'integTestFixtures')   // tests not run
++    // integTestRuntime project(path: ':core', configuration: 'integTestFixturesRuntime')   // tests not run
++}
++
++// left out for the bootstrap with gradle-0.8 (integration tests / ide):
++// task integTest(type: Test, dependsOn: [ rootProject.intTestImage ]) {
++//     systemProperties['integTest.gradleHomeDir'] = rootProject.intTestImage.integTestGradleHome.absolutePath
++//     systemProperties['integTest.gradleUserHomeDir'] = rootProject.integTest.integTestUserDir.absolutePath
++//     testClassesDir = sourceSets.integTest.classesDir
++//     classpath = sourceSets.integTest.runtimeClasspath
++
++//     doFirst { task -> systemProperties['integTest.gradleHomeDir'] = rootProject.intTestImage.integTestGradleHome.absolutePath }
++// }
++
++test {
++    // jvmArgs '-Xms128m', '-Xmx256m', '-XX:MaxPermSize=128m', '-XX:+HeapDumpOnOutOfMemoryError'   // gradle-0.8: no jvmArgs on test (tests not run)
++}
+diff --git a/subprojects/gradle-wrapper/wrapper.gradle.0.8 b/subprojects/gradle-wrapper/wrapper.gradle.0.8
+new file mode 100644
+index 00000000000..4a87d58e7cf
+--- /dev/null
++++ b/subprojects/gradle-wrapper/wrapper.gradle.0.8
+@@ -0,0 +1,39 @@
++// subprojects/gradle-wrapper/wrapper.gradle of REL_0.9 in the DSL of Gradle 0.8 (the builder of this step), see settings.gradle.0.8
++/*
++ * Copyright 2010 the original author or authors.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++// apply plugin: 'groovy': the groovy plugin is applied by the root project (usePlugin, gradle-0.8)
++
++dependencies {
++    groovy libraries.groovy_depends
++    compile project(':core')
++
++    compile libraries.commons_io, libraries.ant, libraries.ant_nodeps
++
++    // testCompile project(path: ':core', configuration: 'testFixtures')   // tests not run
++    // testRuntime project(path: ':core', configuration: 'testFixturesRuntime')   // tests not run
++}
++
++// gradle-0.8 builder: Jar tasks have no copy spec (exclude/from/include). gradle-wrapper.jar (the wrapper classes,
++// copied into projects by the wrapper task) is built with ant after the compilation, into the classes dir as in 0.9.
++// The wrapper classes stay in the jar of this project too (not excluded as in 0.9).
++compileGroovy.doLast {
++    ant.jar(destfile: new File(sourceSets.main.classesDir, 'gradle-wrapper.jar')) {
++        fileset(dir: sourceSets.main.classesDir, includes: 'org/gradle/wrapper/**')
++        manifest {
++            attribute(name: 'Main-Class', value: 'org.gradle.wrapper.GradleWrapperMain')
++        }
++    }
++}
+-- 
+2.43.0
+
