@@ -1,0 +1,16 @@
+apply plugin: 'java'
+
+sourceCompatibility = 1.5
+targetCompatibility = 1.5
+version = '1.0'
+group = 'hello'
+
+jar.manifest.attributes('Main-Class': 'hello.Main', 'Implementation-Version': gradle.gradleVersion)
+
+task hello << {
+    println "Hello from Gradle ${gradle.gradleVersion}, project $project.name"
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '1.0'
+}

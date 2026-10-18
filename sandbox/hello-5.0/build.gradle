@@ -1,0 +1,13 @@
+// sandbox for Gradle 5.0 and later: task << {} is gone (doLast), Java 6+ only
+apply plugin: 'java'
+
+version = '1.0'
+group = 'hello'
+
+jar.manifest.attributes('Main-Class': 'hello.Main', 'Implementation-Version': gradle.gradleVersion)
+
+task hello {
+    doLast {
+        println "Hello from Gradle ${gradle.gradleVersion}, project $project.name"
+    }
+}

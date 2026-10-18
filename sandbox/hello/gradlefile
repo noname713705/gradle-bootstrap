@@ -1,0 +1,14 @@
+usePlugin('java')
+
+sourceCompatibility = 1.5
+targetCompatibility = 1.5
+version = '1.0'
+group = 'hello'
+
+gradleVersion = new org.gradle.util.GradleVersion().version
+
+manifest.mainAttributes('Main-Class': 'hello.Main', 'Implementation-Version': gradleVersion)
+
+createTask('hello') {
+    println "Hello from Gradle $gradleVersion, project $project.name"
+}
